@@ -7,4 +7,3 @@
 </ul>
 
 <h3>Skills</h3>
-<img src="http://www.w3.org/2000/svg"></img>
