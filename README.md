@@ -1,4 +1,4 @@
-# Hi! My name is Dmitry Dvoryannikov
+<h1 align="center">Hi! My name is Dmitry Dvoryannikov</h1>
 ### Mobile & Backend Kotlin developer
 ---
 - 🌍 I`m based in Moscow, Russia
