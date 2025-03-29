@@ -2,7 +2,7 @@
 <h3 align="center">Mobile & Backend Kotlin developer</h3>
 <ul>
   <li>🌍 I`m based in Moscow, Russia</li>
-  <li>✉️ You can contact me at d.y.dvoryannikov@mail.ru</li>
+  <li>✉️ You can contact me at d.y.dvoryannikov@mail.ru or <a href="https://t.me/ItzEphir">telegram</a></li>
 </ul>
 
 <h3>Skills</h3>
