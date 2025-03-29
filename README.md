@@ -5,5 +5,3 @@
   <li>🌍 I`m based in Moscow, Russia</li>
   <li>✉️ You can contact me at d.y.dvoryannikov@mail.ru</li>
 </ul>
-
-[![GitHub Streak](https://streak-stats.demolab.com/?user=ItzEphir)](https://git.io/streak-stats)
