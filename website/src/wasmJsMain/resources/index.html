@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>Dmitry Dvoryannikov — Mobile & Backend Kotlin Developer</title>
+    <meta name="description" content="Персональный сайт Дмитрия Дворянникова — Mobile & Backend Kotlin developer из Москвы. Kotlin Multiplatform, Compose, Ktor, Swift и UIKit.">
+    <meta name="theme-color" content="#121116">
+    <meta name="color-scheme" content="dark light">
+
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://itzephir.com/">
+    <meta property="og:title" content="Dmitry Dvoryannikov — Kotlin Developer">
+    <meta property="og:description" content="Приложения, сервисы и инструменты на Kotlin, Compose Multiplatform, Ktor и Swift.">
+    <meta property="og:image" content="https://avatars.githubusercontent.com/u/81320723?v=4">
+    <meta name="twitter:card" content="summary">
+
+    <link rel="canonical" href="https://itzephir.com/">
+    <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "name": "Dmitry Dvoryannikov",
+      "alternateName": "ItzEphir",
+      "url": "https://itzephir.com/",
+      "image": "https://avatars.githubusercontent.com/u/81320723?v=4",
+      "jobTitle": "Mobile & Backend Kotlin Developer",
+      "address": { "@type": "PostalAddress", "addressLocality": "Moscow", "addressCountry": "RU" },
+      "sameAs": ["https://github.com/itzephir", "https://t.me/ItzEphir"]
+    }
+    </script>
+</head>
+<body>
+    <div id="app" aria-label="Персональный сайт Дмитрия Дворянникова">
+        <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
+            <div class="boot-mark" aria-hidden="true">D</div>
+            <p class="boot-title">itzephir.com</p>
+            <p class="boot-caption">Запускаю Kotlin/Wasm</p>
+            <p class="boot-detail" id="boot-detail" hidden>Нужен современный браузер с поддержкой WasmGC.</p>
+            <div class="boot-track" aria-hidden="true"><span></span></div>
+            <button class="boot-retry" id="boot-retry" type="button" hidden>Попробовать ещё раз</button>
+        </div>
+    </div>
+    <noscript>
+        <main class="fallback">
+            <h1>Dmitry Dvoryannikov</h1>
+            <p>Mobile & Backend Kotlin developer from Moscow.</p>
+            <p><a href="https://github.com/itzephir">GitHub</a> · <a href="https://t.me/ItzEphir">Telegram</a></p>
+        </main>
+    </noscript>
+    <script>
+        (() => {
+            const app = document.getElementById("app");
+            const caption = document.querySelector(".boot-caption");
+            const detail = document.getElementById("boot-detail");
+            const retry = document.getElementById("boot-retry");
+            let failed = false;
+
+            const showFailure = (message) => {
+                if (app.classList.contains("compose-ready") || failed) return;
+                failed = true;
+                app.classList.add("compose-failed");
+                caption.textContent = message;
+                document.querySelector(".boot-track")?.remove();
+                detail.hidden = false;
+                retry.hidden = false;
+            };
+
+            retry.addEventListener("click", () => window.location.reload());
+
+            if (!("WebAssembly" in window)) {
+                showFailure("Этот браузер не поддерживает WebAssembly");
+                return;
+            }
+
+            if (window.location.protocol === "file:") {
+                showFailure("Wasm нужно открыть через локальный сервер");
+                return;
+            }
+
+            window.addEventListener("error", () => {
+                showFailure("Не удалось загрузить Wasm-приложение");
+            }, { once: true });
+
+            window.addEventListener("unhandledrejection", () => {
+                showFailure("Не удалось запустить Wasm-приложение");
+            }, { once: true });
+
+            window.setTimeout(() => {
+                if (!app.classList.contains("compose-ready") && !failed) {
+                    caption.textContent = "Первый запуск может занять немного времени";
+                }
+            }, 5000);
+
+            window.setTimeout(() => {
+                showFailure("Приложение запускается слишком долго");
+            }, 30000);
+        })();
+    </script>
+    <script src="itzephir.js"></script>
+</body>
+</html>

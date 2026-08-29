@@ -1,0 +1,156 @@
+:root {
+    color-scheme: dark light;
+    background: #171719;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    width: 100%;
+    min-width: 320px;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+#app {
+    position: relative;
+}
+
+body {
+    overflow: hidden;
+    background: #171719;
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+canvas {
+    display: block;
+    outline: none;
+}
+
+.boot-screen {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background:
+        radial-gradient(circle at 20% 15%, rgba(199, 132, 185, 0.15), transparent 34%),
+        radial-gradient(circle at 86% 74%, rgba(143, 174, 189, 0.13), transparent 30%),
+        #171719;
+    color: #f0eaef;
+    transition: opacity 320ms ease, visibility 320ms ease;
+}
+
+.compose-ready .boot-screen {
+    visibility: hidden;
+    opacity: 0;
+}
+
+.boot-mark {
+    display: grid;
+    width: 64px;
+    height: 64px;
+    place-items: center;
+    border-radius: 21px;
+    background: #dca5d2;
+    color: #44213c;
+    font-size: 28px;
+    font-weight: 800;
+    box-shadow: 0 18px 54px rgba(199, 132, 185, 0.2);
+}
+
+.boot-title {
+    margin: 20px 0 0;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+}
+
+.boot-caption {
+    margin: 8px 0 0;
+    color: #c9c2c8;
+    font-size: 13px;
+}
+
+.boot-detail {
+    max-width: 320px;
+    margin: 10px 24px 0;
+    color: #918991;
+    font-size: 12px;
+    line-height: 18px;
+    text-align: center;
+}
+
+.boot-track {
+    width: 156px;
+    height: 4px;
+    margin-top: 24px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: rgba(240, 234, 239, 0.12);
+}
+
+.boot-track span {
+    display: block;
+    width: 52%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #dca5d2, #8faebd);
+    animation: boot-progress 1.15s ease-in-out infinite alternate;
+}
+
+.boot-retry {
+    margin-top: 22px;
+    padding: 12px 18px;
+    border: 0;
+    border-radius: 999px;
+    background: #dca5d2;
+    color: #44213c;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.boot-retry:hover {
+    background: #edbee2;
+}
+
+.boot-retry:focus-visible {
+    outline: 3px solid rgba(143, 174, 189, 0.72);
+    outline-offset: 3px;
+}
+
+.compose-failed .boot-mark {
+    background: #a8c7d5;
+    color: #113540;
+}
+
+@keyframes boot-progress {
+    from { transform: translateX(-96%); }
+    to { transform: translateX(188%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .boot-track span {
+        animation-duration: 2.4s;
+    }
+}
+
+.fallback {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 80px 24px;
+    color: #f0eaef;
+}
+
+.fallback a {
+    color: #a8c7d5;
+}

@@ -1,0 +1,108 @@
+name: Website CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v5
+
+      - name: Check project
+        run: ./gradlew check
+
+      - name: Build production Wasm website
+        run: ./gradlew :website:wasmJsBrowserDistribution
+
+      - name: Upload static website artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: itzephir-website
+          path: website/build/dist/wasmJs/productionExecutable
+          if-no-files-found: error
+          retention-days: 14
+
+  deploy:
+    name: Deploy ${{ github.ref_name }}
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
+      url: ${{ github.ref_name == 'main' && 'https://itzephir.com' || 'https://dev.itzephir.com' }}
+    permissions:
+      contents: read
+
+    steps:
+      - name: Download production website
+        uses: actions/download-artifact@v5
+        with:
+          name: itzephir-website
+          path: dist
+
+      - name: Configure SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/itzephir_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/itzephir_deploy ~/.ssh/known_hosts
+
+      - name: Select environment
+        id: environment
+        run: |
+          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+            echo "target=prod" >> "$GITHUB_OUTPUT"
+            echo "host=itzephir.com" >> "$GITHUB_OUTPUT"
+          else
+            echo "target=dev" >> "$GITHUB_OUTPUT"
+            echo "host=dev.itzephir.com" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Deploy atomically
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TARGET: ${{ steps.environment.outputs.target }}
+          SITE_HOST: ${{ steps.environment.outputs.host }}
+        run: |
+          release="${GITHUB_SHA::12}"
+          base="/srv/itzephir/$TARGET"
+          ssh_args=(-i ~/.ssh/itzephir_deploy -o BatchMode=yes)
+
+          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mkdir -p '$base/releases/$release'"
+
+          rsync -az --delete --chmod=D755,F644 \
+            -e "ssh -i ~/.ssh/itzephir_deploy -o BatchMode=yes" \
+            dist/ "$DEPLOY_USER@$DEPLOY_HOST:$base/releases/$release/"
+
+          ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "ln -sfn '$base/releases/$release' '$base/current.next' && \
+             mv -Tf '$base/current.next' '$base/current' && \
+             curl -fsS -H 'Host: $SITE_HOST' http://127.0.0.1/ >/dev/null && \
+             find '$base/releases' -mindepth 1 -maxdepth 1 -type d \
+               ! -name '$release' -mtime +7 -exec rm -rf -- {} +"
