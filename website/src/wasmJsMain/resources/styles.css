@@ -36,14 +36,8 @@ canvas {
     position: absolute;
     inset: 0;
     z-index: 10;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    background:
-        radial-gradient(circle at 20% 15%, rgba(199, 132, 185, 0.15), transparent 34%),
-        radial-gradient(circle at 86% 74%, rgba(143, 174, 189, 0.13), transparent 30%),
-        #171719;
+    overflow: auto;
+    background: #171719;
     color: #f0eaef;
     transition: opacity 320ms ease, visibility 320ms ease;
 }
@@ -53,45 +47,179 @@ canvas {
     opacity: 0;
 }
 
-.boot-mark {
-    display: grid;
-    width: 64px;
-    height: 64px;
-    place-items: center;
-    border-radius: 21px;
-    background: #dca5d2;
-    color: #44213c;
-    font-size: 28px;
-    font-weight: 800;
-    box-shadow: 0 18px 54px rgba(199, 132, 185, 0.2);
+.shell-page {
+    width: 100%;
+    min-height: 100%;
+    padding: 0 44px 56px;
 }
 
-.boot-title {
-    margin: 20px 0 0;
-    font-size: 18px;
+.shell-header {
+    display: flex;
+    width: 100%;
+    min-height: 92px;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.shell-brand {
+    display: flex;
+    flex-direction: column;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    line-height: 15px;
+    letter-spacing: 0.04em;
+}
+
+.shell-brand span {
+    color: #c9c2c8;
+    font-size: 10px;
+}
+
+.shell-theme {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 18px;
+    border-radius: 999px;
+    background: #252326;
+    color: #c9c2c8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: -0.02em;
+    letter-spacing: 0.04em;
+}
+
+.shell-theme i {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #8faebd;
+}
+
+.shell-hero {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(280px, 3fr);
+    gap: 52px;
+    align-items: center;
+    padding-top: 74px;
+}
+
+.shell-copy {
+    min-width: 0;
+}
+
+.shell-eyebrow {
+    display: inline-block;
+    padding: 8px 14px;
+    border-radius: 999px;
+    background: #252326;
+    color: #a8c7d5;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+}
+
+.shell-copy h1 {
+    margin: 18px 0 0;
+    font-size: clamp(58px, 6vw, 76px);
+    font-weight: 900;
+    line-height: 1;
+    letter-spacing: -0.045em;
+}
+
+.shell-copy h2 {
+    margin: 24px 0 0;
+    color: #a8c7d5;
+    font-size: 22px;
+    line-height: 28px;
+}
+
+.shell-role {
+    margin: 8px 0 0;
+    color: #dca5d2;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 12px;
+    font-weight: 700;
+    line-height: 18px;
+    letter-spacing: 0.04em;
+}
+
+.shell-lead {
+    max-width: 630px;
+    margin: 12px 0 0;
+    color: #c9c2c8;
+    font-size: 18px;
+    line-height: 28px;
+}
+
+.shell-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 30px;
+}
+
+.shell-button {
+    padding: 17px 26px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.shell-button-primary {
+    background: #dca5d2;
+    color: #44213c;
+}
+
+.shell-button-secondary {
+    background: #294b57;
+    color: #c4e7f5;
+}
+
+.shell-portrait {
+    display: grid;
+    margin: 0;
+    place-items: center;
+}
+
+.shell-portrait img {
+    width: min(100%, 320px);
+    height: auto;
+    aspect-ratio: 1;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.shell-status {
+    display: flex;
+    position: fixed;
+    right: 28px;
+    bottom: 24px;
+    z-index: 2;
+    min-width: 210px;
+    flex-direction: column;
+    align-items: flex-end;
+    color: #918991;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 10px;
 }
 
 .boot-caption {
-    margin: 8px 0 0;
-    color: #c9c2c8;
-    font-size: 13px;
+    margin: 0 0 8px;
 }
 
 .boot-detail {
-    max-width: 320px;
-    margin: 10px 24px 0;
-    color: #918991;
-    font-size: 12px;
-    line-height: 18px;
-    text-align: center;
+    max-width: 300px;
+    margin: 8px 0 0;
+    line-height: 16px;
+    text-align: right;
 }
 
 .boot-track {
-    width: 156px;
-    height: 4px;
-    margin-top: 24px;
+    width: 210px;
+    height: 3px;
     overflow: hidden;
     border-radius: 999px;
     background: rgba(240, 234, 239, 0.12);
@@ -99,7 +227,7 @@ canvas {
 
 .boot-track span {
     display: block;
-    width: 52%;
+    width: 46%;
     height: 100%;
     border-radius: inherit;
     background: linear-gradient(90deg, #dca5d2, #8faebd);
@@ -107,35 +235,76 @@ canvas {
 }
 
 .boot-retry {
-    margin-top: 22px;
-    padding: 12px 18px;
+    margin-top: 12px;
+    padding: 10px 15px;
     border: 0;
     border-radius: 999px;
     background: #dca5d2;
     color: #44213c;
     font: inherit;
-    font-size: 13px;
     font-weight: 700;
     cursor: pointer;
 }
 
-.boot-retry:hover {
-    background: #edbee2;
-}
-
-.boot-retry:focus-visible {
-    outline: 3px solid rgba(143, 174, 189, 0.72);
-    outline-offset: 3px;
-}
-
-.compose-failed .boot-mark {
-    background: #a8c7d5;
-    color: #113540;
+.compose-failed .shell-status {
+    color: #a8c7d5;
 }
 
 @keyframes boot-progress {
     from { transform: translateX(-96%); }
-    to { transform: translateX(188%); }
+    to { transform: translateX(212%); }
+}
+
+@media (max-width: 719px) {
+    .shell-page {
+        padding: 0 20px 44px;
+    }
+
+    .shell-header {
+        min-height: 76px;
+    }
+
+    .shell-theme {
+        padding: 10px 13px;
+    }
+
+    .shell-hero {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 44px;
+        padding-top: 38px;
+    }
+
+    .shell-copy h1 {
+        font-size: clamp(43px, 13vw, 54px);
+        letter-spacing: -0.04em;
+    }
+
+    .shell-copy h2 {
+        font-size: 19px;
+        line-height: 25px;
+    }
+
+    .shell-lead {
+        font-size: 16px;
+        line-height: 25px;
+    }
+
+    .shell-portrait img {
+        width: min(78vw, 260px);
+    }
+
+    .shell-status {
+        position: static;
+        min-width: 0;
+        margin-top: 34px;
+        align-items: flex-start;
+    }
+
+    .boot-detail {
+        text-align: left;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -35,6 +35,12 @@ jobs:
       - name: Build production Wasm website
         run: ./gradlew :website:wasmJsBrowserDistribution
 
+      - name: Prepare optimized static assets
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y brotli
+          deploy/prepare-web-release.sh
+
       - name: Upload static website artifact
         uses: actions/upload-artifact@v6
         with:

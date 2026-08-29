@@ -17,6 +17,8 @@
 
     <link rel="canonical" href="https://itzephir.com/">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
+    <link rel="preload" href="/composeResources/com.itzephir.website.generated.resources/drawable/avatar.jpg" as="image" fetchpriority="high">
+    <!-- WASM_PRELOADS -->
     <link rel="stylesheet" href="styles.css">
 
     <script type="application/ld+json">
@@ -35,13 +37,40 @@
 </head>
 <body>
     <div id="app" aria-label="Персональный сайт Дмитрия Дворянникова">
-        <div class="boot-screen" id="boot-screen" role="status" aria-live="polite">
-            <div class="boot-mark" aria-hidden="true">D</div>
-            <p class="boot-title">itzephir.com</p>
-            <p class="boot-caption">Запускаю Kotlin/Wasm</p>
-            <p class="boot-detail" id="boot-detail" hidden>Нужен современный браузер с поддержкой WasmGC.</p>
-            <div class="boot-track" aria-hidden="true"><span></span></div>
-            <button class="boot-retry" id="boot-retry" type="button" hidden>Попробовать ещё раз</button>
+        <div class="boot-screen" id="boot-screen">
+            <div class="shell-page">
+                <header class="shell-header">
+                    <div class="shell-brand">
+                        <strong>ITZEPHIR / PORTFOLIO</strong>
+                        <span>MOSCOW&nbsp;&nbsp;·&nbsp;&nbsp;2026</span>
+                    </div>
+                    <span class="shell-theme"><i></i> LIGHT</span>
+                </header>
+
+                <main class="shell-hero">
+                    <section class="shell-copy">
+                        <span class="shell-eyebrow">// HELLO, WORLD</span>
+                        <h1>Дмитрий<br>Дворянников</h1>
+                        <h2>Mobile &amp; Backend Kotlin Developer</h2>
+                        <p class="shell-role">ЯНДЕКС&nbsp;&nbsp;/&nbsp;&nbsp;ЛЕКТОР ШМР 2026</p>
+                        <p class="shell-lead">Делаю продукты, которыми хочется пользоваться: от мобильных интерфейсов до надёжных серверных систем.</p>
+                        <div class="shell-actions">
+                            <a class="shell-button shell-button-primary" href="https://github.com/itzephir" target="_blank" rel="noopener noreferrer">Смотреть GitHub&nbsp; &gt;</a>
+                            <a class="shell-button shell-button-secondary" href="https://t.me/ItzEphir" target="_blank" rel="noopener noreferrer">Написать мне</a>
+                        </div>
+                    </section>
+                    <figure class="shell-portrait">
+                        <img src="/composeResources/com.itzephir.website.generated.resources/drawable/avatar.jpg" alt="Дмитрий Дворянников" width="320" height="320">
+                    </figure>
+                </main>
+
+                <div class="shell-status" role="status" aria-live="polite">
+                    <p class="boot-caption">Запускаю интерактивную версию</p>
+                    <div class="boot-track" aria-hidden="true"><span></span></div>
+                    <p class="boot-detail" id="boot-detail" hidden>Нужен современный браузер с поддержкой WasmGC.</p>
+                    <button class="boot-retry" id="boot-retry" type="button" hidden>Попробовать ещё раз</button>
+                </div>
+            </div>
         </div>
     </div>
     <noscript>

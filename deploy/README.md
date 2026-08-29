@@ -38,3 +38,9 @@ One Let's Encrypt certificate covers `itzephir.com`, `www.itzephir.com`, and
 stored in `/var/www/letsencrypt`; nginx keeps that challenge path available over
 HTTP and redirects all other requests to HTTPS. `www.itzephir.com` redirects to
 the canonical `itzephir.com` hostname.
+
+The production artifact is prepared by `deploy/prepare-web-release.sh`. It
+injects preload hints for generated Wasm filenames, removes source maps, and
+creates Brotli and gzip variants. nginx serves these precompressed assets and
+keeps the hashed Wasm files immutable while the unhashed entry script is never
+cached across releases.
