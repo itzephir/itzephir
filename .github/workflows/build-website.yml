@@ -36,7 +36,7 @@ jobs:
         run: ./gradlew :website:wasmJsBrowserDistribution
 
       - name: Upload static website artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: itzephir-website
           path: website/build/dist/wasmJs/productionExecutable
@@ -56,7 +56,7 @@ jobs:
 
     steps:
       - name: Download production website
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v7
         with:
           name: itzephir-website
           path: dist
@@ -103,6 +103,7 @@ jobs:
           ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
             "ln -sfn '$base/releases/$release' '$base/current.next' && \
              mv -Tf '$base/current.next' '$base/current' && \
-             curl -fsS -H 'Host: $SITE_HOST' http://127.0.0.1/ >/dev/null && \
+             curl -fsS --resolve '$SITE_HOST:443:127.0.0.1' \
+               'https://$SITE_HOST/' >/dev/null && \
              find '$base/releases' -mindepth 1 -maxdepth 1 -type d \
                ! -name '$release' -mtime +7 -exec rm -rf -- {} +"
