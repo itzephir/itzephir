@@ -14,8 +14,10 @@ fun main() {
                 window.open(url, target = "_blank", features = "noopener,noreferrer")
             },
             onReady = {
-                window.setTimeout(
-                    handler = {
+                // Give Compose two browser frames to draw instead of imposing
+                // a fixed 250 ms delay on every visit, including cached loads.
+                window.requestAnimationFrame {
+                    window.requestAnimationFrame {
                         document.getElementById("app")?.classList?.add("compose-ready")
                         window.setTimeout(
                             handler = {
@@ -24,10 +26,8 @@ fun main() {
                             },
                             timeout = 500,
                         )
-                        null
-                    },
-                    timeout = 250,
-                )
+                    }
+                }
             },
         )
     }

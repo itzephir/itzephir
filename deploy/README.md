@@ -52,8 +52,28 @@ stored in `/var/www/letsencrypt`; nginx keeps that challenge path available over
 HTTP and redirects all other requests to HTTPS. `www.itzephir.com` redirects to
 the canonical `itzephir.com` hostname.
 
-The production artifact is prepared by `deploy/prepare-web-release.sh`. It
-injects preload hints for generated Wasm filenames, removes source maps, and
-creates Brotli and gzip variants. nginx serves these precompressed assets and
-keeps the hashed Wasm files immutable while the unhashed entry script is never
-cached across releases.
+The production artifact is prepared by `deploy/prepare-web-release.sh`, using
+Node.js 24+ and its built-in Brotli/gzip support (no extra compression package).
+It injects preload hints for generated Wasm filenames, inlines the small startup
+stylesheet, and names the entry script by its SHA-256 content hash. Both the
+script preload and the deferred script loader use that same versioned URL.
+nginx serves precompressed assets; the existing static-asset policy can safely
+cache the versioned script between visits. The legacy `itzephir.js` endpoint
+remains `no-store` for compatibility; hashed Wasm stays immutable.
+
+Run `node --test deploy/tests/*.test.mjs` to check CSS inlining, consistent
+preloads, cache invalidation, idempotent packaging, and compression round trips.
+These checks also run in CI before the Kotlin build.
+
+For a repeatable browser comparison, keep two prepared distribution directories
+and run `node deploy/benchmark-startup.mjs /path/to/before /path/to/after` with
+Playwright and Chromium installed. Optional `PLAYWRIGHT_MODULE` and
+`CHROME_EXECUTABLE` environment variables select existing installations. The
+benchmark alternates three cold/warm runs per build at 10 Mbps, 100 ms latency,
+and 4x CPU slowdown; it prints JSON lines with paint, Compose readiness, resource
+timings, and bytes transferred. It uses isolated browser contexts and local
+servers, with the same caching policy as nginx. These are comparative lab
+measurements, not a guarantee of a visitor's loading time.
+
+The measured before/after results and remaining limitations are recorded in
+[PERFORMANCE.md](PERFORMANCE.md).

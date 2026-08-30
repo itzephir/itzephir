@@ -1,8 +1,9 @@
 # itzephir.com website
 
 The portfolio is a Compose Multiplatform application targeting Kotlin/Wasm.
-The HTML file is only the browser shell; the visible interface is rendered by
-Compose into a canvas.
+The HTML first screen displays immediately while Compose loads in the background.
+The interactive interface is rendered by Compose into a canvas. Keep the hero
+copy in `index.html` aligned with `App.kt` when editing personal information.
 
 ## Run locally
 
@@ -17,6 +18,7 @@ their resources must be loaded through the development server.
 
 ```bash
 ./gradlew check :website:wasmJsBrowserDistribution
+deploy/prepare-web-release.sh
 ```
 
 The deployable static files are generated in:
@@ -24,6 +26,11 @@ The deployable static files are generated in:
 ```text
 website/build/dist/wasmJs/productionExecutable
 ```
+
+The preparation step requires Node.js 24+ and adds inline startup styles, early
+Wasm loading, a content-hashed entry script, and precompressed Brotli/gzip files.
+It is safe to run more than once. Development builds keep their normal external
+stylesheet and unversioned entry point.
 
 The production server must:
 

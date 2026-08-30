@@ -20,6 +20,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+
+      - name: Test release preparation
+        run: node --test deploy/tests/*.test.mjs
+
       - name: Set up Java
         uses: actions/setup-java@v5
         with:
@@ -36,10 +44,7 @@ jobs:
         run: ./gradlew :website:wasmJsBrowserDistribution
 
       - name: Prepare optimized static assets
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y brotli
-          deploy/prepare-web-release.sh
+        run: deploy/prepare-web-release.sh
 
       - name: Upload static website artifact
         uses: actions/upload-artifact@v6
