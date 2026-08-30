@@ -2,14 +2,27 @@
 
 The website has two independent environments on one virtual machine:
 
-| Git branch | Server path | Hostname |
+| Trigger | Server path | Hostname |
 | --- | --- | --- |
-| `main` | `/srv/itzephir/prod/current` | `itzephir.com` |
-| `dev` | `/srv/itzephir/dev/current` | `dev.itzephir.com` |
+| Push/merge into `main` | `/srv/itzephir/prod/current` | `itzephir.com` |
+| Open/update/reopen a same-repository PR targeting `main` | `/srv/itzephir/dev/current` | `dev.itzephir.com` |
 
-Every push is built and checked by `.github/workflows/build-website.yml`.
-Pushes to `main` and `dev` are uploaded into a commit-specific release
-directory and activated by atomically replacing the `current` symlink.
+Develop changes in a separate branch and open a PR targeting `main`. The
+`.github/workflows/build-website.yml` workflow checks and builds the PR merge
+commit, then deploys it to development. It publishes the preview URL in the
+GitHub environment and updates a single comment in the PR. Merging the PR into
+`main` triggers production deployment; opening a PR never changes production.
+
+Development is one shared preview, not one instance per PR: the last completed
+deployment wins. Uploads and activation are serialized per environment, and a
+running deployment is never canceled by another deployment. Each run gets its
+own release directory, activated by atomically replacing the `current` symlink.
+Closing a PR leaves the last preview available until another PR deploys.
+
+Fork and Dependabot PRs run build checks only and never receive deployment
+secrets. The workflow intentionally uses `pull_request`, not
+`pull_request_target`. Manual workflow runs are build-only. Direct pushes to
+the legacy `dev` branch no longer trigger deployment.
 
 The GitHub repository requires these Actions secrets:
 

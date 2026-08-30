@@ -2,20 +2,20 @@ name: Website CI/CD
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main]
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: website-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
+    concurrency:
+      group: website-build-${{ github.ref }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -50,13 +50,21 @@ jobs:
           retention-days: 14
 
   deploy:
-    name: Deploy ${{ github.ref_name }}
-    if: github.event_name == 'push'
+    name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}
+    # Forks and Dependabot PRs are checked, but never receive deployment secrets.
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'pull_request' &&
+       github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.pull_request.user.login != 'dependabot[bot]')
     needs: build
     runs-on: ubuntu-latest
     environment:
-      name: ${{ github.ref_name == 'main' && 'production' || 'development' }}
-      url: ${{ github.ref_name == 'main' && 'https://itzephir.com' || 'https://dev.itzephir.com' }}
+      name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      url: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'https://itzephir.com' || 'https://dev.itzephir.com' }}
+    concurrency:
+      group: website-deploy-${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'development' }}
+      cancel-in-progress: false
     permissions:
       contents: read
 
@@ -80,12 +88,15 @@ jobs:
       - name: Select environment
         id: environment
         run: |
-          if [[ "$GITHUB_REF_NAME" == "main" ]]; then
+          if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
             echo "target=prod" >> "$GITHUB_OUTPUT"
             echo "host=itzephir.com" >> "$GITHUB_OUTPUT"
-          else
+          elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             echo "target=dev" >> "$GITHUB_OUTPUT"
             echo "host=dev.itzephir.com" >> "$GITHUB_OUTPUT"
+          else
+            echo "This event is not allowed to deploy" >&2
+            exit 1
           fi
 
       - name: Deploy atomically
@@ -95,7 +106,7 @@ jobs:
           TARGET: ${{ steps.environment.outputs.target }}
           SITE_HOST: ${{ steps.environment.outputs.host }}
         run: |
-          release="${GITHUB_SHA::12}"
+          release="${GITHUB_SHA::12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           base="/srv/itzephir/$TARGET"
           ssh_args=(-i ~/.ssh/itzephir_deploy -o BatchMode=yes)
 
@@ -113,3 +124,43 @@ jobs:
                'https://$SITE_HOST/' >/dev/null && \
              find '$base/releases' -mindepth 1 -maxdepth 1 -type d \
                ! -name '$release' -mtime +7 -exec rm -rf -- {} +"
+
+  preview-link:
+    name: Publish preview link
+    if: github.event_name == 'pull_request'
+    needs: deploy
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Update preview comment
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: issue_number });
+            if (pr.state !== 'open' || pr.head.sha !== context.payload.pull_request.head.sha) {
+              core.notice('Skipping preview comment for a closed or outdated PR revision.');
+              return;
+            }
+            const marker = '<!-- itzephir-development-preview -->';
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const body = [
+              marker,
+              '✅ Preview готов: **[dev.itzephir.com](https://dev.itzephir.com)**',
+              '',
+              `Коммит PR: \`${pr.head.sha.slice(0, 7)}\` · [Проверки и деплой](${runUrl})`,
+              '',
+              'Это общий тестовый стенд: его обновляет последний успешный PR-деплой. Production не изменялся.',
+            ].join('\n');
+            const comments = await github.paginate(github.rest.issues.listComments, {
+              owner, repo, issue_number, per_page: 100,
+            });
+            const previous = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.includes(marker));
+            if (previous) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: previous.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
