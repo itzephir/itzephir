@@ -18,6 +18,7 @@
     <link rel="canonical" href="https://itzephir.com/">
     <link rel="icon" href="favicon.svg" type="image/svg+xml">
     <link rel="preload" href="/composeResources/com.itzephir.website.generated.resources/drawable/avatar.jpg" as="image" fetchpriority="high">
+    <link rel="preload" href="itzephir.js" as="script">
     <!-- WASM_PRELOADS -->
     <link rel="stylesheet" href="styles.css">
 
@@ -129,6 +130,14 @@
             }, 30000);
         })();
     </script>
-    <script src="itzephir.js"></script>
+    <script>
+        // Let the HTML shell paint before Compose initializes the canvas.
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+            if (document.getElementById("app").classList.contains("compose-failed")) return;
+            const script = document.createElement("script");
+            script.src = "itzephir.js";
+            document.body.appendChild(script);
+        }));
+    </script>
 </body>
 </html>

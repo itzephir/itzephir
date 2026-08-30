@@ -13,6 +13,12 @@ fi
 command -v brotli >/dev/null
 command -v gzip >/dev/null
 
+if command -v sha256sum >/dev/null; then
+    css_version="$(sha256sum "$distribution_dir/styles.css" | cut -c 1-12)"
+else
+    css_version="$(shasum -a 256 "$distribution_dir/styles.css" | cut -c 1-12)"
+fi
+
 wasm_files=()
 while IFS= read -r wasm_file; do
     wasm_files+=("$wasm_file")
@@ -35,13 +41,16 @@ for wasm_file in "${wasm_files[@]}"; do
         "$wasm_file" >> "$preloads_file"
 done
 
-awk -v preloads="$preloads_file" '
+awk -v preloads="$preloads_file" -v css_version="$css_version" '
     /<!-- WASM_PRELOADS -->/ {
         while ((getline line < preloads) > 0) print line
         close(preloads)
         next
     }
-    { print }
+    {
+        sub(/href="styles.css"/, "href=\"styles.css?v=" css_version "\"")
+        print
+    }
 ' "$index_file" > "$index_tmp"
 
 install -m 644 "$index_tmp" "$index_file"
