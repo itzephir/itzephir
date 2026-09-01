@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFile, readdir, unlink, writeFile } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import { brotliCompress, constants, gzip } from 'node:zlib';
@@ -10,6 +10,19 @@ const compressGzip = promisify(gzip);
 const preloadBlock = /<!-- WASM_PRELOADS_START -->[\s\S]*?<!-- WASM_PRELOADS_END -->/;
 const styleBlock = /<link rel="stylesheet" href="styles\.css(?:\?v=[a-f0-9]+)?">|<style id="critical-css">[\s\S]*?<\/style>/;
 const entryReference = /itzephir(?:\.[a-f0-9]{20})?\.js/g;
+
+async function compressibleAssets(root, directory = root) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const assets = [];
+  for (const entry of entries) {
+    const path = join(directory, entry.name);
+    if (entry.isDirectory()) assets.push(...await compressibleAssets(root, path));
+    else if (entry.isFile() && /\.(html|css|js|wasm|svg|ttf)$/.test(entry.name)) {
+      assets.push(relative(root, path));
+    }
+  }
+  return assets.sort();
+}
 
 export async function prepareRelease(directory) {
   const root = resolve(directory);
@@ -49,9 +62,7 @@ export async function prepareRelease(directory) {
     if (name.endsWith('.map') || obsoleteEntry) await unlink(join(root, name));
   }
 
-  const assets = (await readdir(root, { withFileTypes: true }))
-    .filter(file => file.isFile() && /\.(html|css|js|wasm|svg)$/.test(file.name))
-    .map(file => file.name).sort();
+  const assets = await compressibleAssets(root);
   const report = [];
   for (const name of assets) {
     const content = await readFile(join(root, name));

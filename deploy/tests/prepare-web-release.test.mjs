@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import test from 'node:test';
@@ -20,6 +20,8 @@ async function fixture(t) {
     'a.wasm': Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]),
     'b.wasm': Buffer.from([0, 97, 115, 109, 1, 0, 0, 0]),
   }).map(([name, data]) => writeFile(join(root, name), data)));
+  await mkdir(join(root, 'composeResources', 'font'), { recursive: true });
+  await writeFile(join(root, 'composeResources', 'font', 'site.ttf'), Buffer.from('font fixture'));
   return root;
 }
 
@@ -45,6 +47,7 @@ test('Brotli and gzip decode byte-for-byte to every source asset', async t => {
     assert.deepEqual(brotliDecompressSync(await readFile(join(root, `${asset.file}.br`))), original);
     assert.deepEqual(gunzipSync(await readFile(join(root, `${asset.file}.gz`))), original);
   }
+  assert.ok(report.assets.some(asset => asset.file === join('composeResources', 'font', 'site.ttf')));
 });
 
 test('running preparation twice does not duplicate styles or preloads', async t => {

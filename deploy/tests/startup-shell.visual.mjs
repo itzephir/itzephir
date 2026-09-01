@@ -24,7 +24,7 @@ const colors = {
 };
 const types = {
   '.html': 'text/html', '.js': 'application/javascript', '.wasm': 'application/wasm',
-  '.css': 'text/css', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg',
+  '.css': 'text/css', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.ttf': 'font/ttf',
 };
 
 function pixelMatches(data, index, target, tolerance = 10) {
@@ -115,7 +115,7 @@ async function waitForLandmarks(page, compact) {
   throw lastError;
 }
 
-function assertClose(shell, compose, viewport) {
+function visualDrifts(shell, compose, viewport) {
   const drifts = [];
   for (const name of Object.keys(shell)) {
     for (const field of ['x', 'y', 'width', 'height']) {
@@ -125,9 +125,10 @@ function assertClose(shell, compose, viewport) {
       }
     }
   }
-  assert.equal(shell.primaryButton.y, shell.secondaryButton.y,
-    `${viewport} startup buttons must stay on one row`);
-  assert.deepEqual(drifts, []);
+  if (shell.primaryButton.y !== shell.secondaryButton.y) {
+    drifts.push(`${viewport} startup buttons must stay on one row`);
+  }
+  return drifts;
 }
 
 async function serve() {
@@ -149,6 +150,7 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
   assert.ok(executablePath, 'Set CHROME_EXECUTABLE to a Chrome or Chromium binary');
   const server = await serve();
   const browser = await chromium.launch({ executablePath, headless: true });
+  const drifts = [];
   try {
     for (const [viewport, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
       const context = await browser.newContext({ viewport: { width, height } });
@@ -159,6 +161,7 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
       const wasmGate = new Promise(resolve => { releaseWasm = resolve; });
       await page.route('**/*.wasm', async route => { await wasmGate; await route.continue(); });
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+      await page.evaluate(() => document.fonts.ready);
       await page.locator('.shell-portrait img').evaluate(image => image.decode());
       const shell = await waitForLandmarks(page, viewport === 'mobile');
       releaseWasm();
@@ -166,10 +169,11 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
         { timeout: 60000 });
       await page.waitForFunction(() => !document.getElementById('boot-screen'), null, { timeout: 10000 });
       const compose = await waitForLandmarks(page, viewport === 'mobile');
-      assertClose(shell, compose, viewport);
+      drifts.push(...visualDrifts(shell, compose, viewport));
       assert.deepEqual(errors, []);
       await context.close();
     }
+    assert.deepEqual(drifts, []);
   } finally {
     await browser.close();
     await new Promise(resolve => server.close(resolve));

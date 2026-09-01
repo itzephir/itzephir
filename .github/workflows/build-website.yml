@@ -62,7 +62,7 @@ jobs:
   visual:
     name: Check startup shell against Compose
     needs: build
-    runs-on: macos-15
+    runs-on: ubuntu-latest
     concurrency:
       group: website-visual-${{ github.ref }}
       cancel-in-progress: true
@@ -88,9 +88,8 @@ jobs:
 
       - name: Compare startup shell and Compose
         env:
-          CHROME_EXECUTABLE: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
           VISUAL_DIST: ${{ github.workspace }}/dist
-        run: npm run test:visual --prefix deploy
+        run: CHROME_EXECUTABLE="$(command -v google-chrome)" npm run test:visual --prefix deploy
 
   deploy:
     name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}

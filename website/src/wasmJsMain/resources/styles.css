@@ -3,6 +3,14 @@
     background: #171719;
 }
 
+@font-face {
+    font-family: "Site Sans";
+    src: url("/composeResources/com.itzephir.website.generated.resources/font/roboto_f99820f9f1c7c171.ttf") format("truetype");
+    font-style: normal;
+    font-weight: 100 900;
+    font-display: block;
+}
+
 * {
     box-sizing: border-box;
 }
@@ -24,7 +32,7 @@ body,
 body {
     overflow: hidden;
     background: #171719;
-    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Site Sans", sans-serif;
 }
 
 canvas {
@@ -72,7 +80,8 @@ canvas {
 
 .shell-brand span {
     color: #c9c2c8;
-    font-size: 10px;
+    font-size: 11px;
+    line-height: 15px;
 }
 
 .shell-theme {
@@ -87,7 +96,7 @@ canvas {
     font-size: 11px;
     font-weight: 700;
     line-height: 15px;
-    letter-spacing: 0.04em;
+    letter-spacing: 0.5px;
 }
 
 .shell-theme i {
@@ -118,22 +127,22 @@ canvas {
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 11px;
     font-weight: 700;
-    line-height: 13px;
-    letter-spacing: 0.04em;
+    line-height: 15px;
+    letter-spacing: 0.5px;
 }
 
 .shell-copy h1 {
-    margin: 26px 0 0;
-    font-size: 75px;
+    margin: 20px 0 0;
+    font-size: 76px;
     font-weight: 900;
     line-height: 76px;
-    letter-spacing: -5.7px;
+    letter-spacing: -3.2px;
 }
 
 .shell-copy h2 {
     margin: 24px 0 0;
     color: #a8c7d5;
-    font-size: 21px;
+    font-size: 22px;
     line-height: 28px;
 }
 
@@ -149,7 +158,7 @@ canvas {
 
 .shell-lead {
     max-width: 630px;
-    margin: 8px 0 0;
+    margin: 12px 0 0;
     color: #c9c2c8;
     font-size: 18px;
     line-height: 28px;
@@ -162,29 +171,29 @@ canvas {
     margin-top: 30px;
 }
 
-.shell-mobile-break {
-    display: none;
-}
-
 .shell-button {
+    display: inline-flex;
+    height: 52px;
     padding: 17px 26px;
     border-radius: 999px;
+    align-items: center;
+    justify-content: center;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 13px;
     font-weight: 700;
-    line-height: 17px;
+    line-height: 18px;
+    letter-spacing: 0.5px;
     text-decoration: none;
 }
 
 .shell-button-primary {
-    padding-right: 23px;
-    padding-left: 23px;
+    width: 174px;
     background: #dca5d2;
     color: #44213c;
 }
 
 .shell-button-secondary {
-    padding-right: 25px;
-    padding-left: 25px;
+    width: 145px;
     background: #294b57;
     color: #c4e7f5;
 }
@@ -276,26 +285,26 @@ canvas {
     }
 
     .shell-theme {
-        padding: 11px 14px;
+        padding: 12px 14px;
     }
 
     .shell-hero {
         display: flex;
         flex-direction: column;
         align-items: stretch;
-        gap: 46px;
+        gap: 44px;
         padding-top: 43px;
     }
 
     .shell-copy h1 {
-        margin-top: 23px;
+        margin-top: 20px;
         font-size: 52px;
         line-height: 54px;
-        letter-spacing: -4px;
+        letter-spacing: -2px;
     }
 
     .shell-copy h2 {
-        font-size: 21px;
+        font-size: 22px;
         line-height: 28px;
     }
 
@@ -305,11 +314,7 @@ canvas {
     }
 
     .shell-actions {
-        margin-top: 24px;
-    }
-
-    .shell-mobile-break {
-        display: inline;
+        margin-top: 21px;
     }
 
     .shell-portrait {

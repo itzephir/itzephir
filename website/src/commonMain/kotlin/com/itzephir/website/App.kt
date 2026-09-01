@@ -56,6 +56,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.itzephir.website.generated.resources.Res
 import com.itzephir.website.generated.resources.avatar
+import com.itzephir.website.generated.resources.roboto_f99820f9f1c7c171
+import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.painterResource
 
 private val DustyPink = Color(0xFFC784B9)
@@ -109,48 +111,48 @@ private val LightColors = lightColorScheme(
     outlineVariant = Color(0xFFD7CBD3),
 )
 
-private val SiteTypography = Typography(
+private fun siteTypography(fontFamily: FontFamily) = Typography(
     displayLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 76.sp,
         lineHeight = 76.sp,
         fontWeight = FontWeight.Black,
         letterSpacing = (-3.2).sp,
     ),
     displayMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 52.sp,
         lineHeight = 54.sp,
         fontWeight = FontWeight.Black,
         letterSpacing = (-2).sp,
     ),
     headlineLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 38.sp,
         lineHeight = 42.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = (-1).sp,
     ),
     headlineMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 28.sp,
         lineHeight = 33.sp,
         fontWeight = FontWeight.Bold,
         letterSpacing = (-0.5).sp,
     ),
     titleLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 22.sp,
         lineHeight = 28.sp,
         fontWeight = FontWeight.Bold,
     ),
     bodyLarge = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 18.sp,
         lineHeight = 28.sp,
     ),
     bodyMedium = TextStyle(
-        fontFamily = FontFamily.SansSerif,
+        fontFamily = fontFamily,
         fontSize = 15.sp,
         lineHeight = 23.sp,
     ),
@@ -231,12 +233,18 @@ fun App(
     onReady: () -> Unit = {},
 ) {
     var darkTheme by remember { mutableStateOf(true) }
+    val siteSans = FontFamily(
+        Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Normal),
+        Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Medium),
+        Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Bold),
+        Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Black),
+    )
 
     LaunchedEffect(Unit) { onReady() }
 
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = SiteTypography,
+        typography = siteTypography(siteSans),
     ) {
         FramedPortfolio(
             darkTheme = darkTheme,
