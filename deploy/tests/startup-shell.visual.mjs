@@ -168,36 +168,47 @@ async function serve() {
   return server;
 }
 
-test('startup shell keeps critical text visible while web fonts are pending', async () => {
+test('startup shell is revealed atomically after fonts and portrait are ready', async () => {
   assert.ok(executablePath, 'Set CHROME_EXECUTABLE to a Chrome or Chromium binary');
   const server = await serve();
   const browser = await chromium.launch({ executablePath, headless: true });
   let releaseFonts;
+  let releasePortrait;
   let releaseWasm;
   const fontGate = new Promise(resolve => { releaseFonts = resolve; });
+  const portraitGate = new Promise(resolve => { releasePortrait = resolve; });
   const wasmGate = new Promise(resolve => { releaseWasm = resolve; });
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
     await page.route('**/*.ttf', async route => { await fontGate; await route.continue(); });
+    await page.route('**/avatar.jpg', async route => { await portraitGate; await route.continue(); });
     await page.route('**/*.wasm', async route => { await wasmGate; await route.continue(); });
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
-    await page.locator('.shell-portrait img').evaluate(image => image.decode());
     assert.equal(await page.evaluate(() => document.fonts.status), 'loading');
+    assert.equal(await page.locator('.shell-page').evaluate(element => getComputedStyle(element).visibility), 'hidden');
 
-    // Playwright screenshots wait for web fonts by design, while CDP captures
-    // the actual interim frame that a visitor sees during a delayed font load.
+    // CDP captures the actual interim frame without Playwright waiting for web
+    // fonts. No styled surface may leak through before all shell assets exist.
     const cdp = await context.newCDPSession(page);
     const screenshot = await cdp.send('Page.captureScreenshot', {
       format: 'png',
       captureBeyondViewport: false,
     });
     const image = PNG.sync.read(Buffer.from(screenshot.data, 'base64'));
-    colorBounds(image, colors.text, [0, 200, 700, 400]);
-    colorBounds(image, colors.secondary, [0, 380, 700, 450]);
-    colorBounds(image, colors.body, [0, 450, 700, 540]);
+    for (let y = 0; y < image.height; y += 20) for (let x = 0; x < image.width; x += 20) {
+      assert.ok(pixelMatches(image.data, (y * image.width + x) * 4, colors.background, 2),
+        `Partial startup shell leaked at ${x},${y}`);
+    }
+
+    releaseFonts();
+    releasePortrait();
+    await page.waitForFunction(() => document.getElementById('app')?.classList.contains('shell-ready'));
+    await page.locator('.shell-portrait img').evaluate(image => image.decode());
+    landmarks(await page.screenshot(), false);
   } finally {
     releaseFonts?.();
+    releasePortrait?.();
     releaseWasm?.();
     await browser.close();
     await new Promise(resolve => server.close(resolve));

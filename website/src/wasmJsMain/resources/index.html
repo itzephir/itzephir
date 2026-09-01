@@ -134,13 +134,30 @@
         })();
     </script>
     <script>
-        // Let the HTML shell paint before Compose initializes the canvas.
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (document.getElementById("app").classList.contains("compose-failed")) return;
-            const script = document.createElement("script");
-            script.src = "itzephir.js";
-            document.body.appendChild(script);
-        }));
+        (() => {
+            const app = document.getElementById("app");
+            const portrait = document.querySelector(".shell-portrait img");
+            const timeout = new Promise(resolve => window.setTimeout(resolve, 3000));
+            const assets = Promise.all([
+                document.fonts.load('900 76px "Site Sans"'),
+                document.fonts.load('700 13px "Site Mono"'),
+                portrait.decode().catch(() => undefined),
+            ]);
+
+            // The browser may otherwise paint styled surfaces one frame before
+            // their web-font labels and portrait. Reveal the complete shell in
+            // one frame, then start Compose behind it.
+            Promise.race([assets, timeout]).then(() => {
+                requestAnimationFrame(() => requestAnimationFrame(() => {
+                    app.classList.add("shell-ready");
+
+                    if (app.classList.contains("compose-failed")) return;
+                    const script = document.createElement("script");
+                    script.src = "itzephir.js";
+                    document.body.appendChild(script);
+                }));
+            });
+        })();
     </script>
 </body>
 </html>
