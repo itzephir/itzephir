@@ -173,11 +173,14 @@ test('startup shell keeps critical text visible while web fonts are pending', as
   const server = await serve();
   const browser = await chromium.launch({ executablePath, headless: true });
   let releaseFonts;
+  let releaseWasm;
   const fontGate = new Promise(resolve => { releaseFonts = resolve; });
+  const wasmGate = new Promise(resolve => { releaseWasm = resolve; });
   try {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     const page = await context.newPage();
     await page.route('**/*.ttf', async route => { await fontGate; await route.continue(); });
+    await page.route('**/*.wasm', async route => { await wasmGate; await route.continue(); });
     await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
     await page.locator('.shell-portrait img').evaluate(image => image.decode());
     assert.equal(await page.evaluate(() => document.fonts.status), 'loading');
@@ -195,6 +198,7 @@ test('startup shell keeps critical text visible while web fonts are pending', as
     colorBounds(image, colors.body, [0, 450, 700, 540]);
   } finally {
     releaseFonts?.();
+    releaseWasm?.();
     await browser.close();
     await new Promise(resolve => server.close(resolve));
   }
