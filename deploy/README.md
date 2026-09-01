@@ -65,12 +65,13 @@ Run `node --test deploy/tests/*.test.mjs` to check CSS inlining, consistent
 preloads, cache invalidation, idempotent packaging, and compression round trips.
 These checks also run in CI before the Kotlin build.
 
-The CI also runs a real-browser parity test after preparing the production
-distribution. It holds Wasm loading to capture the HTML startup shell, releases
-Compose, then compares the geometry of the brand, theme control, hero copy,
-buttons, and portrait at desktop and mobile viewport sizes. Each landmark may
-move by at most 8 px, and the mobile buttons must remain on one row. Run it
-locally with:
+The CI also runs a real-browser parity test in Chrome on macOS after preparing
+the production distribution. Using a macOS runner is intentional because the
+HTML and Skia generic font families resolve differently on Linux. The test holds
+Wasm loading to capture the HTML startup shell, releases Compose, then compares
+the geometry of the brand, theme control, hero copy, buttons, and portrait at
+desktop and mobile viewport sizes. Each landmark may move by at most 8 px, and
+the mobile buttons must remain on one row. Run it locally with:
 
 ```bash
 npm ci --prefix deploy --ignore-scripts
