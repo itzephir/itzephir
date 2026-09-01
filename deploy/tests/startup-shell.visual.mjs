@@ -233,6 +233,10 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => document.fonts.ready);
       await page.locator('.shell-portrait img').evaluate(image => image.decode());
+      assert.equal(
+        await page.evaluate(() => document.documentElement.classList.contains('platform-macos')),
+        process.platform === 'darwin',
+      );
       assert.equal(await page.locator('.boot-screen').evaluate(element => getComputedStyle(element).transitionDuration), '0s');
       if (debugDirectory) await page.screenshot({ path: `${debugDirectory}/${viewport}-shell.png` });
       const shell = await waitForLandmarks(page, viewport === 'mobile');
