@@ -339,7 +339,7 @@ html.platform-linux .shell-role {
 }
 
 html.platform-linux .shell-lead {
-    transform: translateY(-2px) scale(1.002, 1.0976);
+    transform: translateY(-2px) scale(1.0035, 1.0976);
     transform-origin: left top;
 }
 
