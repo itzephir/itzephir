@@ -102,6 +102,19 @@ function landmarks(buffer, compact) {
   };
 }
 
+async function waitForLandmarks(page, compact) {
+  let lastError;
+  for (let attempt = 0; attempt < 50; attempt++) {
+    try {
+      return landmarks(await page.screenshot(), compact);
+    } catch (error) {
+      lastError = error;
+      await page.waitForTimeout(100);
+    }
+  }
+  throw lastError;
+}
+
 function assertClose(shell, compose, viewport) {
   const drifts = [];
   for (const name of Object.keys(shell)) {
@@ -147,12 +160,12 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
       await page.route('**/*.wasm', async route => { await wasmGate; await route.continue(); });
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
       await page.locator('.shell-portrait img').evaluate(image => image.decode());
-      const shell = landmarks(await page.screenshot(), viewport === 'mobile');
+      const shell = await waitForLandmarks(page, viewport === 'mobile');
       releaseWasm();
       await page.waitForFunction(() => document.getElementById('app')?.classList.contains('compose-ready'), null,
         { timeout: 60000 });
       await page.waitForFunction(() => !document.getElementById('boot-screen'), null, { timeout: 10000 });
-      const compose = landmarks(await page.screenshot(), viewport === 'mobile');
+      const compose = await waitForLandmarks(page, viewport === 'mobile');
       assertClose(shell, compose, viewport);
       assert.deepEqual(errors, []);
       await context.close();
