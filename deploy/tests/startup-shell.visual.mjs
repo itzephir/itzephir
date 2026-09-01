@@ -78,9 +78,10 @@ function largestForeground(image, [left, top, right, bottom]) {
   return best;
 }
 
-function buttonLabelBounds(image, button, background) {
-  const left = button.x + 12, top = button.y + 12;
-  const right = button.x + button.width - 12, bottom = button.y + button.height - 12;
+function interiorLabelBounds(image, container, background, horizontalInset, verticalInset) {
+  const left = container.x + horizontalInset, top = container.y + verticalInset;
+  const right = container.x + container.width - horizontalInset;
+  const bottom = container.y + container.height - verticalInset;
   let minX = right, minY = bottom, maxX = -1, maxY = -1, count = 0;
   for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
     const index = (y * image.width + x) * 4;
@@ -88,7 +89,7 @@ function buttonLabelBounds(image, button, background) {
     minX = Math.min(minX, x); minY = Math.min(minY, y);
     maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); count++;
   }
-  assert.ok(count > 20, `Button label was not found inside ${JSON.stringify(button)}`);
+  assert.ok(count > 20, `Label was not found inside ${JSON.stringify(container)}`);
   return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
 }
 
@@ -103,21 +104,22 @@ function landmarks(buffer, compact) {
     title: [0, 200, 700, 400], subtitle: [0, 380, 700, 450], role: [0, 420, 500, 470],
     lead: [0, 450, 700, 540], buttons: [0, 520, 500, 640], portrait: [850, 150, 1400, 650],
   };
+  const eyebrow = colorBounds(image, colors.surfaceVariant, roi.eyebrow, 3);
   const primaryButton = colorBounds(image, colors.primaryButton, roi.buttons, 3);
   const secondaryButton = colorBounds(image, colors.secondaryButton, roi.buttons, 3);
   return {
     brand: colorBounds(image, colors.text, roi.brand),
     theme: colorBounds(image, colors.surfaceVariant, roi.theme, 3),
-    eyebrow: colorBounds(image, colors.surfaceVariant, roi.eyebrow, 3),
-    eyebrowLabel: colorBounds(image, colors.secondary, roi.eyebrow),
+    eyebrow,
+    eyebrowLabel: interiorLabelBounds(image, eyebrow, colors.surfaceVariant, 8, 6),
     title: colorBounds(image, colors.text, roi.title),
     subtitle: colorBounds(image, colors.secondary, roi.subtitle),
     role: colorBounds(image, colors.primary, roi.role),
     lead: colorBounds(image, colors.body, roi.lead),
     primaryButton,
-    primaryButtonLabel: buttonLabelBounds(image, primaryButton, colors.primaryButton),
+    primaryButtonLabel: interiorLabelBounds(image, primaryButton, colors.primaryButton, 12, 12),
     secondaryButton,
-    secondaryButtonLabel: buttonLabelBounds(image, secondaryButton, colors.secondaryButton),
+    secondaryButtonLabel: interiorLabelBounds(image, secondaryButton, colors.secondaryButton, 12, 12),
     portrait: largestForeground(image, roi.portrait),
   };
 }
