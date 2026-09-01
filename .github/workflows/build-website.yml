@@ -24,9 +24,14 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: "24"
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+
+      - name: Install browser-test dependencies
+        run: npm ci --prefix deploy --ignore-scripts
 
       - name: Test release preparation
-        run: node --test deploy/tests/*.test.mjs
+        run: npm test --prefix deploy
 
       - name: Set up Java
         uses: actions/setup-java@v5
@@ -45,6 +50,9 @@ jobs:
 
       - name: Prepare optimized static assets
         run: deploy/prepare-web-release.sh
+
+      - name: Check startup shell against Compose
+        run: CHROME_EXECUTABLE="$(command -v google-chrome)" npm run test:visual --prefix deploy
 
       - name: Upload static website artifact
         uses: actions/upload-artifact@v6
