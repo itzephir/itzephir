@@ -8,7 +8,7 @@
     src: url("/composeResources/com.itzephir.website.generated.resources/font/roboto_f99820f9f1c7c171.ttf") format("truetype");
     font-style: normal;
     font-weight: 100 900;
-    font-display: block;
+    font-display: swap;
 }
 
 @font-face {
@@ -16,7 +16,7 @@
     src: url("/composeResources/com.itzephir.website.generated.resources/font/roboto_mono_e7069fe300d4629b.ttf") format("truetype");
     font-style: normal;
     font-weight: 100 700;
-    font-display: block;
+    font-display: swap;
 }
 
 * {

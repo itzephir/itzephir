@@ -168,6 +168,38 @@ async function serve() {
   return server;
 }
 
+test('startup shell keeps critical text visible while web fonts are pending', async () => {
+  assert.ok(executablePath, 'Set CHROME_EXECUTABLE to a Chrome or Chromium binary');
+  const server = await serve();
+  const browser = await chromium.launch({ executablePath, headless: true });
+  let releaseFonts;
+  const fontGate = new Promise(resolve => { releaseFonts = resolve; });
+  try {
+    const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+    const page = await context.newPage();
+    await page.route('**/*.ttf', async route => { await fontGate; await route.continue(); });
+    await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
+    await page.locator('.shell-portrait img').evaluate(image => image.decode());
+    assert.equal(await page.evaluate(() => document.fonts.status), 'loading');
+
+    // Playwright screenshots wait for web fonts by design, while CDP captures
+    // the actual interim frame that a visitor sees during a delayed font load.
+    const cdp = await context.newCDPSession(page);
+    const screenshot = await cdp.send('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: false,
+    });
+    const image = PNG.sync.read(Buffer.from(screenshot.data, 'base64'));
+    colorBounds(image, colors.text, [0, 200, 700, 400]);
+    colorBounds(image, colors.secondary, [0, 380, 700, 450]);
+    colorBounds(image, colors.body, [0, 450, 700, 540]);
+  } finally {
+    releaseFonts?.();
+    await browser.close();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
 test('HTML startup shell stays visually aligned with Compose on desktop and mobile', async () => {
   assert.ok(executablePath, 'Set CHROME_EXECUTABLE to a Chrome or Chromium binary');
   const server = await serve();
