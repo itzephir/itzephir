@@ -8,9 +8,10 @@
     <meta name="theme-color" content="#121116">
     <meta name="color-scheme" content="dark light">
     <script>
-        if (navigator.userAgent.includes("Macintosh")) {
-            document.documentElement.classList.add("platform-macos");
-        }
+        const platform = navigator.userAgent.includes("Macintosh")
+            ? "platform-macos"
+            : navigator.userAgent.includes("Linux") ? "platform-linux" : null;
+        if (platform) document.documentElement.classList.add(platform);
     </script>
 
     <meta property="og:type" content="website">

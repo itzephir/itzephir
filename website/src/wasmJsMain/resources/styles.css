@@ -313,6 +313,52 @@ html.platform-macos .shell-portrait img {
     transform: translateY(-1px);
 }
 
+html.platform-linux .shell-brand {
+    transform: translateY(5px);
+}
+
+html.platform-linux .shell-theme {
+    transform: translateY(3px);
+}
+
+html.platform-linux .shell-eyebrow {
+    transform: translateY(2px);
+}
+
+html.platform-linux .shell-copy h1 {
+    transform: translateY(-2px);
+}
+
+html.platform-linux .shell-copy h2 {
+    transform: translateY(3px);
+}
+
+html.platform-linux .shell-role {
+    transform: translateY(2px) scaleY(1.2222);
+    transform-origin: left center;
+}
+
+html.platform-linux .shell-lead {
+    transform: translateY(-2px) scale(1.0054, 1.0976);
+    transform-origin: left top;
+}
+
+html.platform-linux .shell-actions {
+    transform: translateY(-5px);
+}
+
+html.platform-linux .shell-button {
+    justify-content: flex-start;
+}
+
+html.platform-linux .shell-button-primary {
+    width: 202px;
+}
+
+html.platform-linux .shell-button-secondary {
+    margin-left: -3px;
+}
+
 .shell-status {
     display: flex;
     position: fixed;
@@ -468,6 +514,36 @@ html.platform-macos .shell-portrait img {
         width: min(78vw, 254px);
         transform: scaleX(1.0236);
         transform-origin: left center;
+    }
+
+    html.platform-linux .shell-copy h1 {
+        transform: translateY(4px);
+    }
+
+    html.platform-linux .shell-copy h2 {
+        transform: translateY(5px);
+    }
+
+    html.platform-linux .shell-role {
+        transform: translateY(4px) scaleY(1.2222);
+    }
+
+    html.platform-linux .shell-lead {
+        transform: scaleX(1.0093);
+    }
+
+    html.platform-linux .shell-actions {
+        margin-top: 27px;
+        transform: none;
+    }
+
+    html.platform-linux .shell-button-primary {
+        width: 186px;
+    }
+
+    html.platform-linux .shell-portrait img {
+        transform: scaleY(0.9755);
+        transform-origin: left top;
     }
 
     .shell-status {
