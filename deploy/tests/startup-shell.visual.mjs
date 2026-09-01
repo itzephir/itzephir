@@ -142,7 +142,7 @@ function visualDrifts(shell, compose, viewport) {
   for (const name of Object.keys(shell)) {
     for (const field of ['x', 'y', 'width', 'height']) {
       const difference = Math.abs(shell[name][field] - compose[name][field]);
-      if (difference > 8) {
+      if (difference > 1) {
         drifts.push(`${viewport} ${name}.${field} drifted by ${difference}px: HTML=${shell[name][field]}, Compose=${compose[name][field]}`);
       }
     }
@@ -233,6 +233,7 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => document.fonts.ready);
       await page.locator('.shell-portrait img').evaluate(image => image.decode());
+      assert.equal(await page.locator('.boot-screen').evaluate(element => getComputedStyle(element).transitionDuration), '0s');
       if (debugDirectory) await page.screenshot({ path: `${debugDirectory}/${viewport}-shell.png` });
       const shell = await waitForLandmarks(page, viewport === 'mobile');
       releaseWasm();

@@ -232,15 +232,17 @@ private val projects = listOf(
 fun App(
     openLink: (String) -> Unit,
     onReady: () -> Unit = {},
+    preloadedSiteSans: FontFamily? = null,
+    preloadedSiteMono: FontFamily? = null,
 ) {
     var darkTheme by remember { mutableStateOf(true) }
-    val siteSans = FontFamily(
+    val siteSans = preloadedSiteSans ?: FontFamily(
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Normal),
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Medium),
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Bold),
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Black),
     )
-    val siteMono = FontFamily(
+    val siteMono = preloadedSiteMono ?: FontFamily(
         Font(Res.font.roboto_mono_e7069fe300d4629b, FontWeight.Normal),
         Font(Res.font.roboto_mono_e7069fe300d4629b, FontWeight.Bold),
     )
