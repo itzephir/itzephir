@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import test from 'node:test';
@@ -12,6 +12,7 @@ const repository = fileURLToPath(new URL('../../', import.meta.url));
 const distribution = resolve(process.env.VISUAL_DIST
   ?? `${repository}/website/build/dist/wasmJs/productionExecutable`);
 const executablePath = process.env.CHROME_EXECUTABLE;
+const debugDirectory = process.env.VISUAL_DEBUG_DIR;
 const colors = {
   background: [23, 23, 25],
   surfaceVariant: [37, 35, 38],
@@ -77,6 +78,20 @@ function largestForeground(image, [left, top, right, bottom]) {
   return best;
 }
 
+function buttonLabelBounds(image, button, background) {
+  const left = button.x + 12, top = button.y + 12;
+  const right = button.x + button.width - 12, bottom = button.y + button.height - 12;
+  let minX = right, minY = bottom, maxX = -1, maxY = -1, count = 0;
+  for (let y = top; y < bottom; y++) for (let x = left; x < right; x++) {
+    const index = (y * image.width + x) * 4;
+    if (pixelMatches(image.data, index, background, 12)) continue;
+    minX = Math.min(minX, x); minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); count++;
+  }
+  assert.ok(count > 20, `Button label was not found inside ${JSON.stringify(button)}`);
+  return { x: minX, y: minY, width: maxX - minX + 1, height: maxY - minY + 1 };
+}
+
 function landmarks(buffer, compact) {
   const image = PNG.sync.read(buffer);
   const roi = compact ? {
@@ -88,16 +103,21 @@ function landmarks(buffer, compact) {
     title: [0, 200, 700, 400], subtitle: [0, 380, 700, 450], role: [0, 420, 500, 470],
     lead: [0, 450, 700, 540], buttons: [0, 520, 500, 640], portrait: [850, 150, 1400, 650],
   };
+  const primaryButton = colorBounds(image, colors.primaryButton, roi.buttons, 3);
+  const secondaryButton = colorBounds(image, colors.secondaryButton, roi.buttons, 3);
   return {
     brand: colorBounds(image, colors.text, roi.brand),
     theme: colorBounds(image, colors.surfaceVariant, roi.theme, 3),
     eyebrow: colorBounds(image, colors.surfaceVariant, roi.eyebrow, 3),
+    eyebrowLabel: colorBounds(image, colors.secondary, roi.eyebrow),
     title: colorBounds(image, colors.text, roi.title),
     subtitle: colorBounds(image, colors.secondary, roi.subtitle),
     role: colorBounds(image, colors.primary, roi.role),
     lead: colorBounds(image, colors.body, roi.lead),
-    primaryButton: colorBounds(image, colors.primaryButton, roi.buttons, 3),
-    secondaryButton: colorBounds(image, colors.secondaryButton, roi.buttons, 3),
+    primaryButton,
+    primaryButtonLabel: buttonLabelBounds(image, primaryButton, colors.primaryButton),
+    secondaryButton,
+    secondaryButtonLabel: buttonLabelBounds(image, secondaryButton, colors.secondaryButton),
     portrait: largestForeground(image, roi.portrait),
   };
 }
@@ -125,8 +145,8 @@ function visualDrifts(shell, compose, viewport) {
       }
     }
   }
-  if (shell.primaryButton.y !== shell.secondaryButton.y) {
-    drifts.push(`${viewport} startup buttons must stay on one row`);
+  if (shell.primaryButton.y !== shell.secondaryButton.y || compose.primaryButton.y !== compose.secondaryButton.y) {
+    drifts.push(`${viewport} startup and Compose buttons must stay on one row`);
   }
   return drifts;
 }
@@ -152,6 +172,7 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
   const browser = await chromium.launch({ executablePath, headless: true });
   const drifts = [];
   try {
+    if (debugDirectory) await mkdir(debugDirectory, { recursive: true });
     for (const [viewport, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]]) {
       const context = await browser.newContext({ viewport: { width, height } });
       const page = await context.newPage();
@@ -163,11 +184,13 @@ test('HTML startup shell stays visually aligned with Compose on desktop and mobi
       await page.goto(`http://127.0.0.1:${server.address().port}/`, { waitUntil: 'domcontentloaded' });
       await page.evaluate(() => document.fonts.ready);
       await page.locator('.shell-portrait img').evaluate(image => image.decode());
+      if (debugDirectory) await page.screenshot({ path: `${debugDirectory}/${viewport}-shell.png` });
       const shell = await waitForLandmarks(page, viewport === 'mobile');
       releaseWasm();
       await page.waitForFunction(() => document.getElementById('app')?.classList.contains('compose-ready'), null,
         { timeout: 60000 });
       await page.waitForFunction(() => !document.getElementById('boot-screen'), null, { timeout: 10000 });
+      if (debugDirectory) await page.screenshot({ path: `${debugDirectory}/${viewport}-compose.png` });
       const compose = await waitForLandmarks(page, viewport === 'mobile');
       drifts.push(...visualDrifts(shell, compose, viewport));
       assert.deepEqual(errors, []);

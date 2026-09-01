@@ -30,3 +30,11 @@ startup is still predominantly a download cost; this pass improves early content
 and repeat visits, not the fundamental runtime size. These local measurements
 are comparative, not a promise of real-world load times. Server latency, browser,
 device, and bandwidth can change the result.
+
+## Typography parity follow-up
+
+The measurements above predate the bundled Roboto and Roboto Mono resources.
+Their Brotli files add about 235 KB to an empty cache, in exchange for identical
+HTML and Compose text metrics across operating systems. Both fonts are preloaded,
+content-hashed, and cached immutably. Re-run the benchmark before using the table
+for a new production performance comparison.

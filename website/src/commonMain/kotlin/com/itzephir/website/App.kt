@@ -57,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import com.itzephir.website.generated.resources.Res
 import com.itzephir.website.generated.resources.avatar
 import com.itzephir.website.generated.resources.roboto_f99820f9f1c7c171
+import com.itzephir.website.generated.resources.roboto_mono_e7069fe300d4629b
 import org.jetbrains.compose.resources.Font
 import org.jetbrains.compose.resources.painterResource
 
@@ -111,7 +112,7 @@ private val LightColors = lightColorScheme(
     outlineVariant = Color(0xFFD7CBD3),
 )
 
-private fun siteTypography(fontFamily: FontFamily) = Typography(
+private fun siteTypography(fontFamily: FontFamily, monoFontFamily: FontFamily) = Typography(
     displayLarge = TextStyle(
         fontFamily = fontFamily,
         fontSize = 76.sp,
@@ -157,7 +158,7 @@ private fun siteTypography(fontFamily: FontFamily) = Typography(
         lineHeight = 23.sp,
     ),
     labelLarge = TextStyle(
-        fontFamily = FontFamily.Monospace,
+        fontFamily = monoFontFamily,
         fontSize = 13.sp,
         lineHeight = 18.sp,
         fontWeight = FontWeight.Bold,
@@ -239,12 +240,16 @@ fun App(
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Bold),
         Font(Res.font.roboto_f99820f9f1c7c171, FontWeight.Black),
     )
+    val siteMono = FontFamily(
+        Font(Res.font.roboto_mono_e7069fe300d4629b, FontWeight.Normal),
+        Font(Res.font.roboto_mono_e7069fe300d4629b, FontWeight.Bold),
+    )
 
     LaunchedEffect(Unit) { onReady() }
 
     MaterialTheme(
         colorScheme = if (darkTheme) DarkColors else LightColors,
-        typography = siteTypography(siteSans),
+        typography = siteTypography(siteSans, siteMono),
     ) {
         FramedPortfolio(
             darkTheme = darkTheme,
@@ -365,6 +370,10 @@ private fun Hero(compact: Boolean, openLink: (String) -> Unit) {
 
 @Composable
 private fun HeroCopy(compact: Boolean, openLink: (String) -> Unit) {
+    val buttonPadding = PaddingValues(
+        horizontal = if (compact) 18.dp else 26.dp,
+        vertical = 17.dp,
+    )
     Column {
         Eyebrow("// HELLO, WORLD")
         Spacer(Modifier.height(18.dp))
@@ -399,14 +408,14 @@ private fun HeroCopy(compact: Boolean, openLink: (String) -> Unit) {
             Button(
                 onClick = { openLink("https://github.com/itzephir") },
                 shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 26.dp, vertical = 17.dp),
+                contentPadding = buttonPadding,
             ) {
                 Text("Смотреть GitHub  >")
             }
             FilledTonalButton(
                 onClick = { openLink("https://t.me/ItzEphir") },
                 shape = CircleShape,
-                contentPadding = PaddingValues(horizontal = 26.dp, vertical = 17.dp),
+                contentPadding = buttonPadding,
             ) {
                 Text("Написать мне")
             }
