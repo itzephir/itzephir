@@ -50,13 +50,21 @@ canvas {
 .shell-page {
     width: 100%;
     min-height: 100%;
-    padding: 0 44px 132px;
+    padding: 0 44px 56px;
 }
 
 .shell-header {
     display: flex;
     width: 100%;
-    min-height: 92px;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: space-between;
+    gap: 18px;
+    padding: 30px 0;
+}
+
+.shell-header-top {
+    display: flex;
     align-items: center;
     justify-content: space-between;
 }
@@ -196,7 +204,7 @@ canvas {
     display: flex;
     position: fixed;
     right: 28px;
-    bottom: 112px;
+    bottom: 24px;
     z-index: 2;
     min-width: 210px;
     flex-direction: column;
@@ -208,12 +216,8 @@ canvas {
 
 .shell-webring {
     display: grid;
-    position: fixed;
-    right: 44px;
-    bottom: 22px;
-    left: 44px;
-    z-index: 11;
-    max-width: 1180px;
+    width: 100%;
+    max-width: 420px;
     min-height: 64px;
     margin: 0 auto;
     overflow: hidden;
@@ -302,11 +306,12 @@ canvas {
 
 @media (max-width: 719px) {
     .shell-page {
-        padding: 0 20px 116px;
+        padding: 0 20px 44px;
     }
 
     .shell-header {
-        min-height: 76px;
+        gap: 16px;
+        padding: 22px 0;
     }
 
     .shell-theme {
@@ -348,9 +353,6 @@ canvas {
     }
 
     .shell-webring {
-        right: 20px;
-        bottom: 16px;
-        left: 20px;
         min-height: 56px;
         border-radius: 24px;
     }

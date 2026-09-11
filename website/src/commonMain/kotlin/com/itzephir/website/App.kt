@@ -272,46 +272,27 @@ private fun FramedPortfolio(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = if (compact) 20.dp else 44.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Header(compact, darkTheme, toggleTheme)
-                    Box(
-                        modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
-                    ) {
-                        Column {
-                            Hero(compact, openLink)
-                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                            About(compact)
-                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                            Projects(compact, openLink)
-                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                            Contact(compact, openLink)
-                            Footer(compact)
-                        }
-                    }
-                }
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = if (compact) 20.dp else 44.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                Header(compact, darkTheme, toggleTheme, navigate)
                 Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .padding(
-                            start = if (compact) 20.dp else 44.dp,
-                            end = if (compact) 20.dp else 44.dp,
-                            bottom = if (compact) 16.dp else 22.dp,
-                        ),
-                    contentAlignment = Alignment.Center,
+                    modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
                 ) {
-                    WebringNavigation(
-                        compact = compact,
-                        navigate = navigate,
-                        modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
-                    )
+                    Column {
+                        Hero(compact, openLink)
+                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                        About(compact)
+                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                        Projects(compact, openLink)
+                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                        Contact(compact, openLink)
+                        Footer(compact)
+                    }
                 }
             }
         }
@@ -323,41 +304,52 @@ private fun Header(
     compact: Boolean,
     darkTheme: Boolean,
     toggleTheme: () -> Unit,
+    navigate: (String) -> Unit,
 ) {
-    Row(
+    Column(
         modifier = Modifier
             .fillMaxWidth()
             .widthIn(max = 1180.dp)
             .padding(vertical = if (compact) 22.dp else 30.dp),
-        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column {
-            MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
-            MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
-        }
-        Spacer(Modifier.weight(1f))
-        Surface(
-            modifier = Modifier
-                .clickable(role = Role.Button, onClick = toggleTheme)
-                .semantics { contentDescription = "Переключить тему" },
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column {
+                MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
+                MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+            }
+            Spacer(Modifier.weight(1f))
+            Surface(
+                modifier = Modifier
+                    .clickable(role = Role.Button, onClick = toggleTheme)
+                    .semantics { contentDescription = "Переключить тему" },
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
             ) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (darkTheme) IceBlue else DustyPink),
-                )
-                MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+                Row(
+                    modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Box(
+                        Modifier
+                            .size(8.dp)
+                            .clip(CircleShape)
+                            .background(if (darkTheme) IceBlue else DustyPink),
+                    )
+                    MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+                }
             }
         }
+        Spacer(Modifier.height(if (compact) 16.dp else 18.dp))
+        WebringNavigation(
+            compact = compact,
+            navigate = navigate,
+            modifier = Modifier
+                .align(Alignment.CenterHorizontally)
+                .widthIn(max = 420.dp)
+                .fillMaxWidth(),
+        )
     }
 }
 
@@ -674,7 +666,7 @@ private fun ContactButton(label: String, value: String, onClick: () -> Unit) {
 @Composable
 private fun Footer(compact: Boolean) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 46.dp, bottom = if (compact) 104.dp else 118.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 46.dp, bottom = if (compact) 30.dp else 42.dp),
     ) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(20.dp))
