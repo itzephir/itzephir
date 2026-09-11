@@ -1,5 +1,6 @@
 package com.itzephir.website
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -62,6 +64,10 @@ private val DustyPink = Color(0xFFC784B9)
 private val IceBlue = Color(0xFF8FAEBD)
 private val Ink = Color(0xFF171719)
 private val Paper = Color(0xFFFFF9FC)
+
+private const val WebringUrl = "https://webring.otomir23.me/"
+private const val WebringPreviousUrl = "https://webring.otomir23.me/itzephir/prev"
+private const val WebringNextUrl = "https://webring.otomir23.me/itzephir/next"
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFFDCA5D2),
@@ -228,6 +234,7 @@ private val projects = listOf(
 @Composable
 fun App(
     openLink: (String) -> Unit,
+    navigate: (String) -> Unit = openLink,
     onReady: () -> Unit = {},
 ) {
     var darkTheme by remember { mutableStateOf(true) }
@@ -242,6 +249,7 @@ fun App(
             darkTheme = darkTheme,
             toggleTheme = { darkTheme = !darkTheme },
             openLink = openLink,
+            navigate = navigate,
         )
     }
 }
@@ -251,6 +259,7 @@ private fun FramedPortfolio(
     darkTheme: Boolean,
     toggleTheme: () -> Unit,
     openLink: (String) -> Unit,
+    navigate: (String) -> Unit,
 ) {
     BoxWithConstraints(
         modifier = Modifier
@@ -263,27 +272,46 @@ private fun FramedPortfolio(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.surface,
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = if (compact) 20.dp else 44.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Header(compact, darkTheme, toggleTheme)
-                Box(
-                    modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
+            Box(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = if (compact) 20.dp else 44.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
-                    Column {
-                        Hero(compact, openLink)
-                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                        About(compact)
-                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                        Projects(compact, openLink)
-                        Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
-                        Contact(compact, openLink)
-                        Footer(compact)
+                    Header(compact, darkTheme, toggleTheme)
+                    Box(
+                        modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
+                    ) {
+                        Column {
+                            Hero(compact, openLink)
+                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                            About(compact)
+                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                            Projects(compact, openLink)
+                            Spacer(Modifier.height(if (compact) 76.dp else 118.dp))
+                            Contact(compact, openLink)
+                            Footer(compact)
+                        }
                     }
+                }
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .padding(
+                            start = if (compact) 20.dp else 44.dp,
+                            end = if (compact) 20.dp else 44.dp,
+                            bottom = if (compact) 16.dp else 22.dp,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    WebringNavigation(
+                        compact = compact,
+                        navigate = navigate,
+                        modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
+                    )
                 }
             }
         }
@@ -646,7 +674,7 @@ private fun ContactButton(label: String, value: String, onClick: () -> Unit) {
 @Composable
 private fun Footer(compact: Boolean) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(top = 46.dp, bottom = if (compact) 30.dp else 42.dp),
+        modifier = Modifier.fillMaxWidth().padding(top = 46.dp, bottom = if (compact) 104.dp else 118.dp),
     ) {
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
         Spacer(Modifier.height(20.dp))
@@ -660,6 +688,94 @@ private fun Footer(compact: Boolean) {
                 Spacer(Modifier.weight(1f))
                 MonoText("ITZEPHIR.COM  ·  MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
             }
+        }
+    }
+}
+
+@Composable
+private fun WebringNavigation(
+    compact: Boolean,
+    navigate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val minimumHeight = if (compact) 56.dp else 64.dp
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(if (compact) 24.dp else 28.dp),
+        color = colors.surfaceVariant,
+        contentColor = colors.onSurfaceVariant,
+        border = BorderStroke(1.dp, colors.outlineVariant),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            WebringLink(
+                label = "<- PREV",
+                contentDescription = "Предыдущий сайт в webring",
+                minimumHeight = minimumHeight,
+                containerColor = colors.surfaceVariant,
+                contentColor = colors.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                onClick = { navigate(WebringPreviousUrl) },
+            )
+            VerticalDivider(
+                modifier = Modifier.height(if (compact) 24.dp else 28.dp),
+                color = colors.outlineVariant,
+            )
+            WebringLink(
+                label = "WEBRING",
+                contentDescription = "Открыть список сайтов webring",
+                minimumHeight = minimumHeight,
+                containerColor = colors.secondaryContainer,
+                contentColor = colors.onSecondaryContainer,
+                modifier = Modifier.weight(1f),
+                onClick = { navigate(WebringUrl) },
+            )
+            VerticalDivider(
+                modifier = Modifier.height(if (compact) 24.dp else 28.dp),
+                color = colors.outlineVariant,
+            )
+            WebringLink(
+                label = "NEXT ->",
+                contentDescription = "Следующий сайт в webring",
+                minimumHeight = minimumHeight,
+                containerColor = colors.surfaceVariant,
+                contentColor = colors.onSurfaceVariant,
+                modifier = Modifier.weight(1f),
+                onClick = { navigate(WebringNextUrl) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WebringLink(
+    label: String,
+    contentDescription: String,
+    minimumHeight: Dp,
+    containerColor: Color,
+    contentColor: Color,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    Surface(
+        modifier = modifier
+            .heightIn(min = minimumHeight)
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription },
+        color = containerColor,
+        contentColor = contentColor,
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = label,
+                color = contentColor,
+                style = MaterialTheme.typography.labelLarge.copy(
+                    fontSize = 14.sp,
+                    lineHeight = 18.sp,
+                ),
+                maxLines = 1,
+            )
         }
     }
 }

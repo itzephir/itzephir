@@ -50,7 +50,7 @@ canvas {
 .shell-page {
     width: 100%;
     min-height: 100%;
-    padding: 0 44px 56px;
+    padding: 0 44px 132px;
 }
 
 .shell-header {
@@ -196,7 +196,7 @@ canvas {
     display: flex;
     position: fixed;
     right: 28px;
-    bottom: 24px;
+    bottom: 112px;
     z-index: 2;
     min-width: 210px;
     flex-direction: column;
@@ -204,6 +204,51 @@ canvas {
     color: #918991;
     font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
     font-size: 10px;
+}
+
+.shell-webring {
+    display: grid;
+    position: fixed;
+    right: 44px;
+    bottom: 22px;
+    left: 44px;
+    z-index: 11;
+    max-width: 1180px;
+    min-height: 64px;
+    margin: 0 auto;
+    overflow: hidden;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border: 1px solid #3a373b;
+    border-radius: 28px;
+    background: #252326;
+}
+
+.shell-webring a {
+    display: flex;
+    min-width: 0;
+    min-height: 64px;
+    align-items: center;
+    justify-content: center;
+    color: #c9c2c8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 14px;
+    font-weight: 700;
+    line-height: 18px;
+    text-decoration: none;
+}
+
+.shell-webring a + a {
+    border-left: 1px solid #3a373b;
+}
+
+.shell-webring a:nth-child(2) {
+    background: #294b57;
+    color: #c4e7f5;
+}
+
+.shell-webring a:focus-visible {
+    outline: 2px solid #dca5d2;
+    outline-offset: -4px;
 }
 
 .boot-caption {
@@ -257,7 +302,7 @@ canvas {
 
 @media (max-width: 719px) {
     .shell-page {
-        padding: 0 20px 44px;
+        padding: 0 20px 116px;
     }
 
     .shell-header {
@@ -300,6 +345,18 @@ canvas {
         min-width: 0;
         margin-top: 34px;
         align-items: flex-start;
+    }
+
+    .shell-webring {
+        right: 20px;
+        bottom: 16px;
+        left: 20px;
+        min-height: 56px;
+        border-radius: 24px;
+    }
+
+    .shell-webring a {
+        min-height: 56px;
     }
 
     .boot-detail {
