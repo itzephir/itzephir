@@ -1,6 +1,5 @@
 package com.itzephir.website
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -306,50 +305,73 @@ private fun Header(
     toggleTheme: () -> Unit,
     navigate: (String) -> Unit,
 ) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 1180.dp)
-            .padding(vertical = if (compact) 22.dp else 30.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column {
-                MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
-                MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
-            }
-            Spacer(Modifier.weight(1f))
-            Surface(
-                modifier = Modifier
-                    .clickable(role = Role.Button, onClick = toggleTheme)
-                    .semantics { contentDescription = "Переключить тему" },
-                shape = CircleShape,
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    val modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 1180.dp)
+        .padding(vertical = if (compact) 22.dp else 30.dp)
+
+    if (compact) {
+        Column(modifier = modifier) {
+            HeaderBrand()
+            Spacer(Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.align(Alignment.End),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Box(
-                        Modifier
-                            .size(8.dp)
-                            .clip(CircleShape)
-                            .background(if (darkTheme) IceBlue else DustyPink),
-                    )
-                    MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
-                }
+                WebringNavigation(compact = true, navigate = navigate)
+                ThemeToggle(compact = true, darkTheme = darkTheme, toggleTheme = toggleTheme)
             }
         }
-        Spacer(Modifier.height(if (compact) 16.dp else 18.dp))
-        WebringNavigation(
-            compact = compact,
-            navigate = navigate,
-            modifier = Modifier
-                .align(Alignment.CenterHorizontally)
-                .widthIn(max = 420.dp)
-                .fillMaxWidth(),
-        )
+    } else {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HeaderBrand()
+            Spacer(Modifier.weight(1f))
+            WebringNavigation(compact = false, navigate = navigate)
+            Spacer(Modifier.width(10.dp))
+            ThemeToggle(compact = false, darkTheme = darkTheme, toggleTheme = toggleTheme)
+        }
+    }
+}
+
+@Composable
+private fun HeaderBrand() {
+    Column {
+        MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
+        MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+    }
+}
+
+@Composable
+private fun ThemeToggle(
+    compact: Boolean,
+    darkTheme: Boolean,
+    toggleTheme: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .clickable(role = Role.Button, onClick = toggleTheme)
+            .semantics { contentDescription = "Переключить тему" },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (darkTheme) IceBlue else DustyPink),
+            )
+            MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+        }
     }
 }
 
@@ -691,49 +713,42 @@ private fun WebringNavigation(
     modifier: Modifier = Modifier,
 ) {
     val colors = MaterialTheme.colorScheme
-    val minimumHeight = if (compact) 56.dp else 64.dp
+    val horizontalPadding = if (compact) 10.dp else 12.dp
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(if (compact) 24.dp else 28.dp),
+        shape = CircleShape,
         color = colors.surfaceVariant,
         contentColor = colors.onSurfaceVariant,
-        border = BorderStroke(1.dp, colors.outlineVariant),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             WebringLink(
                 label = "<- PREV",
                 contentDescription = "Предыдущий сайт в webring",
-                minimumHeight = minimumHeight,
-                containerColor = colors.surfaceVariant,
                 contentColor = colors.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+                horizontalPadding = horizontalPadding,
                 onClick = { navigate(WebringPreviousUrl) },
             )
             VerticalDivider(
-                modifier = Modifier.height(if (compact) 24.dp else 28.dp),
+                modifier = Modifier.height(16.dp),
                 color = colors.outlineVariant,
             )
             WebringLink(
                 label = "WEBRING",
                 contentDescription = "Открыть список сайтов webring",
-                minimumHeight = minimumHeight,
-                containerColor = colors.secondaryContainer,
-                contentColor = colors.onSecondaryContainer,
-                modifier = Modifier.weight(1f),
+                contentColor = colors.secondary,
+                horizontalPadding = horizontalPadding,
                 onClick = { navigate(WebringUrl) },
             )
             VerticalDivider(
-                modifier = Modifier.height(if (compact) 24.dp else 28.dp),
+                modifier = Modifier.height(16.dp),
                 color = colors.outlineVariant,
             )
             WebringLink(
                 label = "NEXT ->",
                 contentDescription = "Следующий сайт в webring",
-                minimumHeight = minimumHeight,
-                containerColor = colors.surfaceVariant,
                 contentColor = colors.onSurfaceVariant,
-                modifier = Modifier.weight(1f),
+                horizontalPadding = horizontalPadding,
                 onClick = { navigate(WebringNextUrl) },
             )
         }
@@ -744,31 +759,18 @@ private fun WebringNavigation(
 private fun WebringLink(
     label: String,
     contentDescription: String,
-    minimumHeight: Dp,
-    containerColor: Color,
     contentColor: Color,
-    modifier: Modifier = Modifier,
+    horizontalPadding: Dp,
     onClick: () -> Unit,
 ) {
-    Surface(
-        modifier = modifier
-            .heightIn(min = minimumHeight)
+    Box(
+        modifier = Modifier
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { this.contentDescription = contentDescription },
-        color = containerColor,
-        contentColor = contentColor,
+            .semantics { this.contentDescription = contentDescription }
+            .padding(horizontal = horizontalPadding, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            Text(
-                text = label,
-                color = contentColor,
-                style = MaterialTheme.typography.labelLarge.copy(
-                    fontSize = 14.sp,
-                    lineHeight = 18.sp,
-                ),
-                maxLines = 1,
-            )
-        }
+        MonoText(label, contentColor, small = true)
     }
 }
 
