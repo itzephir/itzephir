@@ -13,6 +13,9 @@ fun main() {
             openLink = { url ->
                 window.open(url, target = "_blank", features = "noopener,noreferrer")
             },
+            navigate = { url ->
+                window.location.assign(url)
+            },
             onReady = {
                 window.setTimeout(
                     handler = {
