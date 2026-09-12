@@ -61,6 +61,12 @@ canvas {
     justify-content: space-between;
 }
 
+.shell-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
 .shell-brand {
     display: flex;
     flex-direction: column;
@@ -108,20 +114,8 @@ canvas {
     min-width: 0;
 }
 
-.shell-eyebrow {
-    display: inline-block;
-    padding: 8px 14px;
-    border-radius: 999px;
-    background: #252326;
-    color: #a8c7d5;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 0.04em;
-}
-
 .shell-copy h1 {
-    margin: 18px 0 0;
+    margin: 0;
     font-size: clamp(58px, 6vw, 76px);
     font-weight: 900;
     line-height: 1;
@@ -206,6 +200,43 @@ canvas {
     font-size: 10px;
 }
 
+.shell-webring {
+    display: grid;
+    width: fit-content;
+    margin: 0 auto;
+    overflow: hidden;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-radius: 999px;
+    background: #252326;
+}
+
+.shell-webring a {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    color: #c9c2c8;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 15px;
+    text-decoration: none;
+}
+
+.shell-webring a + a {
+    border-left: 1px solid #3a373b;
+}
+
+.shell-webring a:nth-child(2) {
+    color: #a8c7d5;
+}
+
+.shell-webring a:focus-visible {
+    outline: 2px solid #dca5d2;
+    outline-offset: -4px;
+}
+
 .boot-caption {
     margin: 0 0 8px;
 }
@@ -261,7 +292,15 @@ canvas {
     }
 
     .shell-header {
-        min-height: 76px;
+        min-height: 0;
+        padding: 22px 0;
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+    }
+
+    .shell-header-actions {
+        justify-content: flex-end;
     }
 
     .shell-theme {
@@ -302,6 +341,14 @@ canvas {
         align-items: flex-start;
     }
 
+    .shell-webring {
+        border-radius: 999px;
+    }
+
+    .shell-webring a {
+        padding-right: 10px;
+        padding-left: 10px;
+    }
     .boot-detail {
         text-align: left;
     }

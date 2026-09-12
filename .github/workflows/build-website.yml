@@ -49,6 +49,24 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  webring:
+    name: Check webring
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download production website artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: itzephir-website
+          path: dist
+
+      - name: Check packaged webring integration
+        run: website/scripts/check-webring.sh dist
+
   deploy:
     name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}
     # Forks and Dependabot PRs are checked, but never receive deployment secrets.
@@ -57,7 +75,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.event.pull_request.head.repo.full_name == github.repository &&
        github.event.pull_request.user.login != 'dependabot[bot]')
-    needs: build
+    needs: [build, webring]
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'development' }}

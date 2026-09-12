@@ -31,6 +31,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -62,6 +63,10 @@ private val DustyPink = Color(0xFFC784B9)
 private val IceBlue = Color(0xFF8FAEBD)
 private val Ink = Color(0xFF171719)
 private val Paper = Color(0xFFFFF9FC)
+
+private const val WebringUrl = "https://webring.otomir23.me/"
+private const val WebringPreviousUrl = "https://webring.otomir23.me/itzephir/prev"
+private const val WebringNextUrl = "https://webring.otomir23.me/itzephir/next"
 
 private val DarkColors = darkColorScheme(
     primary = Color(0xFFDCA5D2),
@@ -228,6 +233,7 @@ private val projects = listOf(
 @Composable
 fun App(
     openLink: (String) -> Unit,
+    navigate: (String) -> Unit = openLink,
     onReady: () -> Unit = {},
 ) {
     var darkTheme by remember { mutableStateOf(true) }
@@ -242,6 +248,7 @@ fun App(
             darkTheme = darkTheme,
             toggleTheme = { darkTheme = !darkTheme },
             openLink = openLink,
+            navigate = navigate,
         )
     }
 }
@@ -251,6 +258,7 @@ private fun FramedPortfolio(
     darkTheme: Boolean,
     toggleTheme: () -> Unit,
     openLink: (String) -> Unit,
+    navigate: (String) -> Unit,
 ) {
     BoxWithConstraints(
         modifier = Modifier
@@ -270,7 +278,7 @@ private fun FramedPortfolio(
                     .padding(horizontal = if (compact) 20.dp else 44.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
-                Header(compact, darkTheme, toggleTheme)
+                Header(compact, darkTheme, toggleTheme, navigate)
                 Box(
                     modifier = Modifier.fillMaxWidth().widthIn(max = 1180.dp),
                 ) {
@@ -295,40 +303,74 @@ private fun Header(
     compact: Boolean,
     darkTheme: Boolean,
     toggleTheme: () -> Unit,
+    navigate: (String) -> Unit,
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .widthIn(max = 1180.dp)
-            .padding(vertical = if (compact) 22.dp else 30.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column {
-            MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
-            MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
-        }
-        Spacer(Modifier.weight(1f))
-        Surface(
-            modifier = Modifier
-                .clickable(role = Role.Button, onClick = toggleTheme)
-                .semantics { contentDescription = "Переключить тему" },
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
-        ) {
+    val modifier = Modifier
+        .fillMaxWidth()
+        .widthIn(max = 1180.dp)
+        .padding(vertical = if (compact) 22.dp else 30.dp)
+
+    if (compact) {
+        Column(modifier = modifier) {
+            HeaderBrand()
+            Spacer(Modifier.height(12.dp))
             Row(
-                modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
+                modifier = Modifier.align(Alignment.End),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(
-                    Modifier
-                        .size(8.dp)
-                        .clip(CircleShape)
-                        .background(if (darkTheme) IceBlue else DustyPink),
-                )
-                MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+                WebringNavigation(compact = true, navigate = navigate)
+                ThemeToggle(compact = true, darkTheme = darkTheme, toggleTheme = toggleTheme)
             }
+        }
+    } else {
+        Row(
+            modifier = modifier,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            HeaderBrand()
+            Spacer(Modifier.weight(1f))
+            WebringNavigation(compact = false, navigate = navigate)
+            Spacer(Modifier.width(10.dp))
+            ThemeToggle(compact = false, darkTheme = darkTheme, toggleTheme = toggleTheme)
+        }
+    }
+}
+
+@Composable
+private fun HeaderBrand() {
+    Column {
+        MonoText("ITZEPHIR / PORTFOLIO", MaterialTheme.colorScheme.onSurface)
+        MonoText("MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
+    }
+}
+
+@Composable
+private fun ThemeToggle(
+    compact: Boolean,
+    darkTheme: Boolean,
+    toggleTheme: () -> Unit,
+) {
+    Surface(
+        modifier = Modifier
+            .clickable(role = Role.Button, onClick = toggleTheme)
+            .semantics { contentDescription = "Переключить тему" },
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = if (compact) 14.dp else 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(
+                Modifier
+                    .size(8.dp)
+                    .clip(CircleShape)
+                    .background(if (darkTheme) IceBlue else DustyPink),
+            )
+            MonoText(if (darkTheme) "LIGHT" else "DARK", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
         }
     }
 }
@@ -358,8 +400,6 @@ private fun Hero(compact: Boolean, openLink: (String) -> Unit) {
 @Composable
 private fun HeroCopy(compact: Boolean, openLink: (String) -> Unit) {
     Column {
-        Eyebrow("// HELLO, WORLD")
-        Spacer(Modifier.height(18.dp))
         Text(
             text = "Дмитрий\nДворянников",
             style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
@@ -661,6 +701,74 @@ private fun Footer(compact: Boolean) {
                 MonoText("ITZEPHIR.COM  ·  MOSCOW  ·  2026", MaterialTheme.colorScheme.onSurfaceVariant, small = true)
             }
         }
+    }
+}
+
+@Composable
+private fun WebringNavigation(
+    compact: Boolean,
+    navigate: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val colors = MaterialTheme.colorScheme
+    val horizontalPadding = if (compact) 10.dp else 12.dp
+
+    Surface(
+        modifier = modifier,
+        shape = CircleShape,
+        color = colors.surfaceVariant,
+        contentColor = colors.onSurfaceVariant,
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            WebringLink(
+                label = "<- PREV",
+                contentDescription = "Предыдущий сайт в webring",
+                contentColor = colors.onSurfaceVariant,
+                horizontalPadding = horizontalPadding,
+                onClick = { navigate(WebringPreviousUrl) },
+            )
+            VerticalDivider(
+                modifier = Modifier.height(16.dp),
+                color = colors.outlineVariant,
+            )
+            WebringLink(
+                label = "WEBRING",
+                contentDescription = "Открыть список сайтов webring",
+                contentColor = colors.secondary,
+                horizontalPadding = horizontalPadding,
+                onClick = { navigate(WebringUrl) },
+            )
+            VerticalDivider(
+                modifier = Modifier.height(16.dp),
+                color = colors.outlineVariant,
+            )
+            WebringLink(
+                label = "NEXT ->",
+                contentDescription = "Следующий сайт в webring",
+                contentColor = colors.onSurfaceVariant,
+                horizontalPadding = horizontalPadding,
+                onClick = { navigate(WebringNextUrl) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WebringLink(
+    label: String,
+    contentDescription: String,
+    contentColor: Color,
+    horizontalPadding: Dp,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .clickable(role = Role.Button, onClick = onClick)
+            .semantics { this.contentDescription = contentDescription }
+            .padding(horizontal = horizontalPadding, vertical = 12.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        MonoText(label, contentColor, small = true)
     }
 }
 
