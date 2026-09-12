@@ -2,125 +2,66 @@
 
 set -euo pipefail
 
-readonly BASE_URL="https://webring.otomir23.me"
-readonly SITE_SLUG="itzephir"
-readonly SITE_URL="https://itzephir.com/"
-readonly USER_AGENT="itzephir-webring-ci/1.0 (+https://itzephir.com/)"
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly INDEX_HTML="$SCRIPT_DIR/../src/wasmJsMain/resources/index.html"
+readonly SITE_ROOT="${1:-website/build/dist/wasmJs/productionExecutable}"
+readonly TEST_HOST="127.0.0.1"
+readonly TEST_PORT="4173"
+readonly TEST_URL="http://$TEST_HOST:$TEST_PORT"
+readonly PREVIOUS_URL="https://webring.otomir23.me/itzephir/prev"
+readonly WEBRING_URL="https://webring.otomir23.me/"
+readonly NEXT_URL="https://webring.otomir23.me/itzephir/next"
 
-curl_args=(
-    --silent
-    --show-error
-    --fail
-    --retry 3
-    --retry-delay 2
-    --retry-all-errors
-    --connect-timeout 10
-    --max-time 30
-    --proto '=https'
-    --proto-redir '=https'
-    --user-agent "$USER_AGENT"
-)
-
-normalize_url() {
-    printf '%s' "${1%/}"
-}
-
-for fallback_url in \
-    "$BASE_URL/$SITE_SLUG/prev" \
-    "$BASE_URL/" \
-    "$BASE_URL/$SITE_SLUG/next"; do
-    if ! grep -Fq "href=\"$fallback_url\"" "$INDEX_HTML"; then
-        echo "Loading fallback does not link to $fallback_url" >&2
-        exit 1
-    fi
-done
-
-central_status="$({
-    curl "${curl_args[@]}" \
-        --location \
-        --max-redirs 10 \
-        --output /dev/null \
-        --write-out '%{http_code}' \
-        "$BASE_URL/"
-})"
-
-if [[ ! "$central_status" =~ ^2[0-9]{2}$ ]]; then
-    echo "Webring index returned HTTP $central_status" >&2
+if [[ ! -f "$SITE_ROOT/index.html" ]]; then
+    echo "Missing website artifact at $SITE_ROOT/index.html" >&2
     exit 1
 fi
 
-site_data="$(curl "${curl_args[@]}" "$BASE_URL/$SITE_SLUG/data")"
+server_log="$(mktemp)"
+python3 -m http.server "$TEST_PORT" \
+    --bind "$TEST_HOST" \
+    --directory "$SITE_ROOT" \
+    >"$server_log" 2>&1 &
+server_pid=$!
 
-jq -e \
-    --arg slug "$SITE_SLUG" \
-    --arg site_url "$SITE_URL" \
-    '
-        def nonempty: type == "string" and length > 0;
+cleanup() {
+    kill "$server_pid" 2>/dev/null || true
+    rm -f "$server_log"
+}
+trap cleanup EXIT
 
-        .curr.slug == $slug and
-        ((.curr.url | rtrimstr("/")) == ($site_url | rtrimstr("/"))) and
-        (.prev.slug | nonempty) and
-        (.prev.name | nonempty) and
-        (.prev.url | nonempty) and
-        (.next.slug | nonempty) and
-        (.next.name | nonempty) and
-        (.next.url | nonempty) and
-        (.prev.slug != .curr.slug) and
-        (.next.slug != .curr.slug)
-    ' <<<"$site_data" >/dev/null
+for attempt in {1..20}; do
+    if curl --silent --fail --output /dev/null "$TEST_URL/"; then
+        break
+    fi
 
-check_direction() {
-    local direction="$1"
-    local expected_url
-    local redirect_result
-    local redirect_status
-    local redirect_url
-    local final_result
-    local final_status
-    local final_url
-
-    expected_url="$(jq -r --arg direction "$direction" '.[$direction].url' <<<"$site_data")"
-    redirect_result="$({
-        curl "${curl_args[@]}" \
-            --output /dev/null \
-            --write-out '%{http_code}\n%{redirect_url}' \
-            "$BASE_URL/$SITE_SLUG/$direction"
-    })"
-    redirect_status="${redirect_result%%$'\n'*}"
-    redirect_url="${redirect_result#*$'\n'}"
-
-    if [[ "$redirect_status" != "302" ]]; then
-        echo "Webring $direction endpoint returned HTTP $redirect_status instead of 302" >&2
+    if [[ "$attempt" == "20" ]]; then
+        echo "Packaged website did not start" >&2
+        sed -n '1,120p' "$server_log" >&2
         exit 1
     fi
 
-    if [[ "$(normalize_url "$redirect_url")" != "$(normalize_url "$expected_url")" ]]; then
-        echo "Webring $direction endpoint redirects to $redirect_url instead of $expected_url" >&2
+    sleep 0.25
+done
+
+page_html="$(curl --silent --show-error --fail "$TEST_URL/")"
+page_css="$(curl --silent --show-error --fail "$TEST_URL/styles.css")"
+
+assert_contains() {
+    local content="$1"
+    local expected="$2"
+    local description="$3"
+
+    if ! grep -Fq "$expected" <<<"$content"; then
+        echo "Missing $description" >&2
         exit 1
     fi
-
-    final_result="$({
-        curl "${curl_args[@]}" \
-            --location \
-            --max-redirs 10 \
-            --output /dev/null \
-            --write-out '%{http_code}\n%{url_effective}' \
-            "$BASE_URL/$SITE_SLUG/$direction"
-    })"
-    final_status="${final_result%%$'\n'*}"
-    final_url="${final_result#*$'\n'}"
-
-    if [[ ! "$final_status" =~ ^2[0-9]{2}$ ]]; then
-        echo "Following the $direction link ended at $final_url with HTTP $final_status" >&2
-        exit 1
-    fi
-
-    echo "Verified $direction navigation to $final_url"
 }
 
-check_direction prev
-check_direction next
+assert_contains "$page_html" 'class="shell-header-actions"' "webring header group"
+assert_contains "$page_html" 'class="shell-webring"' "webring navigation"
+assert_contains "$page_html" "href=\"$PREVIOUS_URL\"" "previous-site link"
+assert_contains "$page_html" "href=\"$WEBRING_URL\"" "webring index link"
+assert_contains "$page_html" "href=\"$NEXT_URL\"" "next-site link"
+assert_contains "$page_css" '.shell-header-actions' "webring header layout"
+assert_contains "$page_css" '.shell-webring' "webring styles"
 
-echo "Webring integration check passed"
+echo "Packaged website webring integration passed"

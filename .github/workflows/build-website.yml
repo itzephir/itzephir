@@ -51,14 +51,21 @@ jobs:
 
   webring:
     name: Check webring
+    needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Check live webring navigation
-        run: website/scripts/check-webring.sh
+      - name: Download production website artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: itzephir-website
+          path: dist
+
+      - name: Check packaged webring integration
+        run: website/scripts/check-webring.sh dist
 
   deploy:
     name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}
