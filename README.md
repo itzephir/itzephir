@@ -23,8 +23,3 @@ to Kotlin Multiplatform, Compose, and Ktor.
 - **[Photorus](https://github.com/itzephir/photorus-tgapp-backend)** — Ktor microservices for an educational Telegram WebApp.
 - **[Calkt](https://github.com/itzephir/calkt)** — an extensible Kotlin expression parser and calculator.
 - **[CashTodo](https://github.com/itzephir/cashtodo)** — an iOS app connecting personal tasks and finances.
-
----
-
-This profile repository also contains the source for **[itzephir.com](https://itzephir.com)**.<br>
-The website is rendered with Compose Multiplatform on Kotlin/Wasm and built as a static deployment artifact by GitHub Actions.
