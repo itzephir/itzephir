@@ -400,8 +400,6 @@ private fun Hero(compact: Boolean, openLink: (String) -> Unit) {
 @Composable
 private fun HeroCopy(compact: Boolean, openLink: (String) -> Unit) {
     Column {
-        Eyebrow("// HELLO, WORLD")
-        Spacer(Modifier.height(18.dp))
         Text(
             text = "Дмитрий\nДворянников",
             style = if (compact) MaterialTheme.typography.displayMedium else MaterialTheme.typography.displayLarge,
