@@ -1,59 +1,70 @@
 # Deployment
 
-The website has two independent environments on one virtual machine:
+The website runs as two independent Ktor/JVM services on the existing VM.
 
-| Trigger | Server path | Hostname |
-| --- | --- | --- |
-| Push/merge into `main` | `/srv/itzephir/prod/current` | `itzephir.com` |
-| Open/update/reopen a same-repository PR targeting `main` | `/srv/itzephir/dev/current` | `dev.itzephir.com` |
+| Trigger | Release path | Service / port | Hostname |
+| --- | --- | --- | --- |
+| Push/merge into `main` | `/srv/itzephir/prod/current` | `itzephir@prod`, `127.0.0.1:18080` | `itzephir.com` |
+| Same-repository PR targeting `main` | `/srv/itzephir/dev/current` | `itzephir@dev`, `127.0.0.1:18081` | `dev.itzephir.com` |
 
-Develop changes in a separate branch and open a PR targeting `main`. The
-`.github/workflows/build-website.yml` workflow checks and builds the PR merge
-commit, then deploys it to development. It publishes the preview URL in the
-GitHub environment and updates a single comment in the PR. Merging the PR into
-`main` triggers production deployment; opening a PR never changes production.
+Develop on a separate feature branch and open a PR targeting `main`. GitHub
+Actions tests the application and packaged distribution, then deploys the PR
+merge commit to the shared development preview. Merging triggers production.
+The last completed PR deployment wins; deployment jobs are serialized per
+environment and a running deployment is never cancelled. Closing a PR leaves
+the last preview available.
 
-Development is one shared preview, not one instance per PR: the last completed
-deployment wins. Uploads and activation are serialized per environment, and a
-running deployment is never canceled by another deployment. Each run gets its
-own release directory, activated by atomically replacing the `current` symlink.
-Closing a PR leaves the last preview available until another PR deploys.
+Fork/Dependabot PRs and manual runs are build/test only. The workflow uses
+`pull_request`, not `pull_request_target`. Direct pushes to the legacy `dev`
+branch do not deploy. Deployment secrets stay unchanged:
+`DEPLOY_HOST`, `DEPLOY_USER` (the existing `deploy` account), `DEPLOY_SSH_KEY`,
+and `DEPLOY_KNOWN_HOSTS`.
 
-Fork and Dependabot PRs run build checks only and never receive deployment
-secrets. The workflow intentionally uses `pull_request`, not
-`pull_request_target`. Manual workflow runs are build-only. Direct pushes to
-the legacy `dev` branch no longer trigger deployment.
+## One-time VM setup
 
-The GitHub repository requires these Actions secrets:
+Copy `deploy/` to the existing Ubuntu VM and run `bash deploy/setup-server.sh`
+as root. It installs Java 21, the systemd service template, loopback port/cookie
+settings, narrowly scoped restart/stop permissions for the `deploy` account,
+and the nginx configuration. It validates sudoers/nginx before activation.
 
-- `DEPLOY_HOST` — SSH host or IP;
-- `DEPLOY_USER` — restricted deployment user;
-- `DEPLOY_SSH_KEY` — private key used only by GitHub Actions;
-- `DEPLOY_KNOWN_HOSTS` — pinned SSH host key line.
+The setup does not start an application or activate a release. nginx continues
+to serve an existing static `index.html` until that environment receives its
+first Ktor release, and can serve it again after rollback. This lets preview
+migrate before production; no application files in production change before
+merging. `ConditionPathExists` prevents an unmigrated service from starting on
+reboot. Legacy Wasm/static nginx locations remain solely for this transition.
 
-The nginx configuration is stored at `deploy/nginx/itzephir.com.conf` and is
-installed as `/etc/nginx/sites-available/itzephir.com`.
+`deploy/nginx/itzephir.com.conf` is the source of truth for
+`/etc/nginx/sites-available/itzephir.com`. It proxies application and `/assets/`
+requests to the appropriate loopback service and never serves application jars
+or deployment scripts as files. Ktor renders HTML and serves its own resources.
+nginx terminates TLS, redirects HTTP/www, and compresses responses. The existing
+Let's Encrypt certificate and webroot renewal challenge remain in place.
 
-## DNS
+DNS remains `@` and `dev` A records at `194.87.190.245`, and `www` as a CNAME
+to `itzephir.com`.
 
-The required records are:
+## Releases and rollback
 
-```text
-@    A      194.87.190.245
-dev  A      194.87.190.245
-www  CNAME  itzephir.com.
+CI builds `website/build/install/website` with Gradle `installDist` and includes
+`activate-release.sh` in its artifact. Browser checks launch that exact packaged
+application using Java 21 and Chrome, checking all six projects, contacts,
+webring, mobile overflow, real HTMX swaps, theme persistence, and JavaScript-off
+navigation. Screenshots are uploaded with the workflow run.
+
+CI uploads to a unique `/srv/itzephir/ENV/releases/RELEASE` directory, atomically
+replaces `current`, and restarts only that environment's systemd service. It
+waits for `/healthz` and checks HTTPS through nginx. If restart or either health
+check fails, it restores the preceding symlink and restarts that version (or
+stops Ktor to resume a preceding static release). This is a restart deployment;
+requests can briefly fail during the restart. It does not promise zero downtime.
+
+Releases older than seven days are cleaned up, except the current and immediately
+previous release. To activate a retained release manually as `deploy`, use:
+
+```bash
+bash /srv/itzephir/dev/releases/RELEASE/deploy/activate-release.sh dev RELEASE
 ```
 
-## HTTPS
-
-One Let's Encrypt certificate covers `itzephir.com`, `www.itzephir.com`, and
-`dev.itzephir.com`. Certbot renews it automatically with the webroot challenge
-stored in `/var/www/letsencrypt`; nginx keeps that challenge path available over
-HTTP and redirects all other requests to HTTPS. `www.itzephir.com` redirects to
-the canonical `itzephir.com` hostname.
-
-The production artifact is prepared by `deploy/prepare-web-release.sh`. It
-injects preload hints for generated Wasm filenames, removes source maps, and
-creates Brotli and gzip variants. nginx serves these precompressed assets and
-keeps the hashed Wasm files immutable while the unhashed entry script is never
-cached across releases.
+Inspect services with `systemctl status itzephir@dev` and
+`journalctl -u itzephir@dev`; replace `dev` with `prod` for production.

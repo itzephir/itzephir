@@ -32,25 +32,22 @@ jobs:
       - name: Check project
         run: ./gradlew check
 
-      - name: Build production Wasm website
-        run: ./gradlew :website:wasmJsBrowserDistribution
-
-      - name: Prepare optimized static assets
+      - name: Package Ktor application
         run: |
-          sudo apt-get update
-          sudo apt-get install -y brotli
-          deploy/prepare-web-release.sh
+          ./gradlew :website:installDist
+          mkdir -p website/build/install/website/deploy
+          cp deploy/activate-release.sh website/build/install/website/deploy/
 
-      - name: Upload static website artifact
+      - name: Upload application artifact
         uses: actions/upload-artifact@v6
         with:
           name: itzephir-website
-          path: website/build/dist/wasmJs/productionExecutable
+          path: website/build/install/website
           if-no-files-found: error
           retention-days: 14
 
-  webring:
-    name: Check webring
+  browser:
+    name: Check Ktor portfolio and webring in Chrome
     needs: build
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -58,14 +55,41 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
-      - name: Download production website artifact
+      - name: Set up Java
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: deploy/package-lock.json
+
+      - name: Install browser-test dependencies
+        run: npm ci --prefix deploy --ignore-scripts
+
+      - name: Download application artifact
         uses: actions/download-artifact@v7
         with:
           name: itzephir-website
           path: dist
 
-      - name: Check packaged webring integration
-        run: website/scripts/check-webring.sh dist
+      - name: Check packaged application
+        env:
+          WEBSITE_DIST: ${{ github.workspace }}/dist
+          BROWSER_OUTPUT: ${{ github.workspace }}/screenshots
+        run: CHROME_EXECUTABLE="$(command -v google-chrome)" npm test --prefix deploy
+
+      - name: Upload browser screenshots
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: portfolio-screenshots
+          path: screenshots
+          if-no-files-found: ignore
 
   deploy:
     name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}
@@ -75,7 +99,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.event.pull_request.head.repo.full_name == github.repository &&
        github.event.pull_request.user.login != 'dependabot[bot]')
-    needs: [build, webring]
+    needs: [build, browser]
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'development' }}
@@ -117,12 +141,24 @@ jobs:
             exit 1
           fi
 
-      - name: Deploy atomically
+      - name: Verify Ktor server prerequisites
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
           TARGET: ${{ steps.environment.outputs.target }}
-          SITE_HOST: ${{ steps.environment.outputs.host }}
+        run: |
+          if ! ssh -i ~/.ssh/itzephir_deploy -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
+            "test -x /usr/bin/java && test -r /etc/itzephir/$TARGET.env && \
+             systemctl cat 'itzephir@$TARGET.service' >/dev/null"; then
+            echo "Ktor VM setup is required; run deploy/setup-server.sh as described in deploy/README.md." >&2
+            exit 1
+          fi
+
+      - name: Activate Ktor release with health checks and rollback
+        env:
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TARGET: ${{ steps.environment.outputs.target }}
         run: |
           release="${GITHUB_SHA::12}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           base="/srv/itzephir/$TARGET"
@@ -136,12 +172,7 @@ jobs:
             dist/ "$DEPLOY_USER@$DEPLOY_HOST:$base/releases/$release/"
 
           ssh "${ssh_args[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
-            "ln -sfn '$base/releases/$release' '$base/current.next' && \
-             mv -Tf '$base/current.next' '$base/current' && \
-             curl -fsS --resolve '$SITE_HOST:443:127.0.0.1' \
-               'https://$SITE_HOST/' >/dev/null && \
-             find '$base/releases' -mindepth 1 -maxdepth 1 -type d \
-               ! -name '$release' -mtime +7 -exec rm -rf -- {} +"
+            "bash '$base/releases/$release/deploy/activate-release.sh' '$TARGET' '$release'"
 
   preview-link:
     name: Publish preview link

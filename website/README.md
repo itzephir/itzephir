@@ -1,36 +1,56 @@
 # itzephir.com website
 
-The portfolio is a Compose Multiplatform application targeting Kotlin/Wasm.
-The HTML file is only the browser shell; the visible interface is rendered by
-Compose into a canvas.
+The portfolio is a Kotlin/JVM application using Ktor 3.6, kotlinx.html, and HTMX.
+Ktor renders the complete page on the server. There is no Compose canvas, Wasm
+bundle, hydration, or frontend build toolchain.
 
 ## Run locally
 
-```bash
-./gradlew :website:wasmJsBrowserDevelopmentRun
-```
-
-Do not open `index.html` directly with a `file://` URL. WebAssembly modules and
-their resources must be loaded through the development server.
-
-## Build for production
+Use JDK 21 or newer:
 
 ```bash
-./gradlew check :website:wasmJsBrowserDistribution
+./gradlew :website:run
 ```
 
-The deployable static files are generated in:
+Open http://127.0.0.1:8080. Optional environment variables:
 
-```text
-website/build/dist/wasmJs/productionExecutable
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `PORT` | `8080` | HTTP listening port |
+| `BIND_HOST` | `127.0.0.1` | Listening address |
+| `COOKIE_SECURE` | `false` | Use `true` behind HTTPS in deployment |
+
+## Rendering and theme
+
+`src/main/kotlin/com/itzephir/website/Portfolio.kt` is the single source of page
+content. Static CSS, images, bundled fonts, and HTMX live in
+`src/main/resources/static`. Resource URLs contain a digest to invalidate browser
+caches after updates; assets are cached for an hour.
+
+The theme link requests `/?theme=light` or `/?theme=dark`. A normal request gets a
+complete HTML document. An `HX-Request: true` request gets just `#portfolio`, which
+HTMX replaces without reloading the document or jumping to the top. The theme
+is saved in an HTTP-only, SameSite=Lax cookie. Both the content and theme link
+work with JavaScript disabled. HTML responses are `no-store` and vary by cookie
+and HTMX headers; history restoration always gets a full document.
+
+External project/contact links open a new tab. Webring links remain same-tab
+navigation, with the existing previous/index/next URLs preserved.
+
+## Build and verify
+
+```bash
+./gradlew check :website:installDist
+npm ci --prefix deploy --ignore-scripts
+CHROME_EXECUTABLE="/path/to/Chrome" npm test --prefix deploy
 ```
 
-The production server must:
+The application distribution is `website/build/install/website`. Start it with
+`bash website/build/install/website/bin/website` and a JDK/JRE 21+ runtime. The
+browser check starts this packaged application, verifies desktop/tablet/mobile
+layouts, HTMX theme switching, reload persistence, self-hosted assets, webring,
+and the no-JavaScript fallback. Screenshots are saved to
+`website/build/browser-check`.
 
-- serve `.wasm` files as `application/wasm`;
-- enable gzip, Brotli, or Zstandard compression for Wasm and JavaScript;
-- keep `index.html` on a short cache lifetime;
-- use long immutable caching for hashed `.wasm` files;
-- redirect HTTP and `www.itzephir.com` to `https://itzephir.com`.
-
-The versioned nginx configuration and CI/CD details live in `../deploy`.
+Deployment, service setup, health checks, and rollback are documented in
+`../deploy/README.md`.
