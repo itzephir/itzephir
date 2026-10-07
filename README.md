@@ -23,3 +23,9 @@ to Kotlin Multiplatform, Compose, and Ktor.
 - **[Photorus](https://github.com/itzephir/photorus-tgapp-backend)** — Ktor microservices for an educational Telegram WebApp.
 - **[Calkt](https://github.com/itzephir/calkt)** — an extensible Kotlin expression parser and calculator.
 - **[CashTodo](https://github.com/itzephir/cashtodo)** — an iOS app connecting personal tasks and finances.
+
+---
+
+This repository also contains [itzephir.com](https://itzephir.com), a server-rendered
+portfolio built with **Ktor, kotlinx.html, and HTMX**. See [website/README.md](website/README.md)
+for local development and [deploy/README.md](deploy/README.md) for CI/CD.
