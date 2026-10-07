@@ -14,7 +14,9 @@ base="${RELEASE_ROOT:-/srv/itzephir}/$target"
 candidate="$base/releases/$release"
 service="itzephir@$target.service"
 [[ -f "$candidate/lib/website.jar" ]] || { echo "Missing website.jar" >&2; exit 1; }
+[[ -f "$candidate/nginx/$target.conf" ]] || { echo "Missing nginx configuration" >&2; exit 1; }
 previous="$(readlink -f "$base/current" || true)"
+nginx_applied=false
 
 activate() {
     ln -sfn "$1" "$base/current.next"
@@ -26,18 +28,23 @@ activate() {
 }
 
 rollback() {
-    echo "Release failed health checks; restoring $previous" >&2
+    echo "Deployment failed; restoring $previous" >&2
+    # Attempt both repairs even if restoring one component fails.
+    set +e
     if [[ -n "$previous" && -d "$previous" ]]; then
         activate "$previous"
         if [[ -f "$previous/lib/website.jar" ]]; then
             sudo -n /usr/bin/systemctl restart "$service"
         else
-            # nginx can still serve the previous Compose/static release.
+            # The initial production deployment may still precede Ktor.
             sudo -n /usr/bin/systemctl stop "$service"
         fi
     else
         sudo -n /usr/bin/systemctl stop "$service"
         rm -f "$base/current"
+    fi
+    if [[ "$nginx_applied" == "true" ]]; then
+        sudo -n /usr/local/sbin/itzephir-apply-nginx "$target" "$release" --rollback
     fi
     exit 1
 }
@@ -54,6 +61,8 @@ for attempt in {1..40}; do
     sleep 0.5
 done
 [[ "$healthy" == "true" ]] || rollback
+sudo -n /usr/local/sbin/itzephir-apply-nginx "$target" "$release" || rollback
+nginx_applied=true
 curl --silent --show-error --fail --max-time 10 \
     --resolve "$site_host:443:127.0.0.1" "https://$site_host/" >/dev/null || rollback
 

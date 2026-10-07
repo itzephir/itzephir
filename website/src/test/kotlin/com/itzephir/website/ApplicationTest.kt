@@ -87,7 +87,6 @@ class ApplicationTest {
             assertEquals(HttpStatusCode.OK, asset.status, url)
             assertTrue(asset.headers[HttpHeaders.CacheControl]!!.contains("max-age=3600"))
             assertFalse(asset.headers[HttpHeaders.ContentType]!!.startsWith("text/html"), url)
-            assertEquals("nosniff", asset.headers["X-Content-Type-Options"])
         }
         assertTrue(client.get("/assets/styles.css").headers[HttpHeaders.ContentType]!!.startsWith(ContentType.Text.CSS.toString()))
         assertEquals(HttpStatusCode.NotFound, client.get("/assets/missing.js").status)

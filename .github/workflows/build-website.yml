@@ -12,7 +12,9 @@ permissions:
 
 jobs:
   build:
+    name: Build and check packaged portfolio
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     concurrency:
       group: website-build-${{ github.ref }}
       cancel-in-progress: true
@@ -29,38 +31,6 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v5
 
-      - name: Check project
-        run: ./gradlew check
-
-      - name: Package Ktor application
-        run: |
-          ./gradlew :website:installDist
-          mkdir -p website/build/install/website/deploy
-          cp deploy/activate-release.sh website/build/install/website/deploy/
-
-      - name: Upload application artifact
-        uses: actions/upload-artifact@v6
-        with:
-          name: itzephir-website
-          path: website/build/install/website
-          if-no-files-found: error
-          retention-days: 14
-
-  browser:
-    name: Check Ktor portfolio and webring in Chrome
-    needs: build
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
-      - name: Set up Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "21"
-
       - name: Set up Node
         uses: actions/setup-node@v6
         with:
@@ -71,15 +41,18 @@ jobs:
       - name: Install browser-test dependencies
         run: npm ci --prefix deploy --ignore-scripts
 
-      - name: Download application artifact
-        uses: actions/download-artifact@v7
-        with:
-          name: itzephir-website
-          path: dist
+      - name: Check and package Ktor application
+        run: |
+          ./gradlew check :website:installDist
+          mkdir -p website/build/install/website/deploy
+          cp deploy/activate-release.sh website/build/install/website/deploy/
+          cp -R deploy/nginx website/build/install/website/nginx
 
-      - name: Check packaged application
+      - name: Check nginx publishing and rollback
+        run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
+
+      - name: Check deployment and portfolio in Chrome
         env:
-          WEBSITE_DIST: ${{ github.workspace }}/dist
           BROWSER_OUTPUT: ${{ github.workspace }}/screenshots
         run: CHROME_EXECUTABLE="$(command -v google-chrome)" npm test --prefix deploy
 
@@ -91,6 +64,14 @@ jobs:
           path: screenshots
           if-no-files-found: ignore
 
+      - name: Upload application artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: itzephir-website
+          path: website/build/install/website
+          if-no-files-found: error
+          retention-days: 14
+
   deploy:
     name: Deploy ${{ github.event_name == 'pull_request' && 'PR preview' || 'production' }}
     # Forks and Dependabot PRs are checked, but never receive deployment secrets.
@@ -99,7 +80,7 @@ jobs:
       (github.event_name == 'pull_request' &&
        github.event.pull_request.head.repo.full_name == github.repository &&
        github.event.pull_request.user.login != 'dependabot[bot]')
-    needs: [build, browser]
+    needs: build
     runs-on: ubuntu-latest
     environment:
       name: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'production' || 'development' }}
@@ -111,7 +92,7 @@ jobs:
       contents: read
 
     steps:
-      - name: Download production website
+      - name: Download checked application release
         uses: actions/download-artifact@v7
         with:
           name: itzephir-website
@@ -132,16 +113,14 @@ jobs:
         run: |
           if [[ "$GITHUB_EVENT_NAME" == "push" && "$GITHUB_REF" == "refs/heads/main" ]]; then
             echo "target=prod" >> "$GITHUB_OUTPUT"
-            echo "host=itzephir.com" >> "$GITHUB_OUTPUT"
           elif [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
             echo "target=dev" >> "$GITHUB_OUTPUT"
-            echo "host=dev.itzephir.com" >> "$GITHUB_OUTPUT"
           else
             echo "This event is not allowed to deploy" >&2
             exit 1
           fi
 
-      - name: Verify Ktor server prerequisites
+      - name: Verify deployment prerequisites
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
@@ -149,12 +128,13 @@ jobs:
         run: |
           if ! ssh -i ~/.ssh/itzephir_deploy -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "test -x /usr/bin/java && test -r /etc/itzephir/$TARGET.env && \
+             test -x /usr/local/sbin/itzephir-apply-nginx && test -r /etc/nginx/itzephir/$TARGET.conf && \
              systemctl cat 'itzephir@$TARGET.service' >/dev/null"; then
             echo "Ktor VM setup is required; run deploy/setup-server.sh as described in deploy/README.md." >&2
             exit 1
           fi
 
-      - name: Activate Ktor release with health checks and rollback
+      - name: Activate application and nginx with health checks and rollback
         env:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_USER: ${{ secrets.DEPLOY_USER }}

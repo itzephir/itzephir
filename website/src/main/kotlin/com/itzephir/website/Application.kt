@@ -7,16 +7,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.call
-import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
 import io.ktor.server.html.respondHtmlPartial
 import io.ktor.server.http.content.staticResources
-import io.ktor.server.plugins.compression.Compression
-import io.ktor.server.plugins.compression.gzip
-import io.ktor.server.plugins.compression.minimumSize
-import io.ktor.server.plugins.defaultheaders.DefaultHeaders
 import io.ktor.server.response.header
 import io.ktor.server.response.respondRedirect
 import io.ktor.server.response.respondText
@@ -30,15 +25,6 @@ fun main() {
 }
 
 fun Application.module(secureCookies: Boolean = System.getenv("COOKIE_SECURE") == "true") {
-    install(DefaultHeaders) {
-        header("X-Content-Type-Options", "nosniff")
-        header("Referrer-Policy", "strict-origin-when-cross-origin")
-        header("X-Frame-Options", "SAMEORIGIN")
-    }
-    install(Compression) {
-        gzip { minimumSize(1024) }
-    }
-
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")

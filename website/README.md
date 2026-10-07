@@ -41,6 +41,7 @@ navigation, with the existing previous/index/next URLs preserved.
 
 ```bash
 ./gradlew check :website:installDist
+python3 -m unittest discover -s deploy/tests -p '*_test.py'
 npm ci --prefix deploy --ignore-scripts
 CHROME_EXECUTABLE="/path/to/Chrome" npm test --prefix deploy
 ```

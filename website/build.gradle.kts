@@ -23,8 +23,6 @@ val ktorVersion = "3.6.0"
 dependencies {
     implementation("io.ktor:ktor-server-cio:$ktorVersion")
     implementation("io.ktor:ktor-server-html-builder:$ktorVersion")
-    implementation("io.ktor:ktor-server-default-headers:$ktorVersion")
-    implementation("io.ktor:ktor-server-compression:$ktorVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.12.0")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
 
