@@ -21,6 +21,7 @@ application {
 val ktorVersion = "3.6.0"
 
 dependencies {
+    implementation(project(":project-locator"))
     implementation("io.ktor:ktor-server-cio:$ktorVersion")
     implementation("io.ktor:ktor-server-html-builder:$ktorVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.12.0")

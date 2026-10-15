@@ -1,5 +1,8 @@
 package com.itzephir.website
 
+import com.itzephir.locator.PostgresLocator
+import com.itzephir.locator.locatorFromEnvironment
+import com.itzephir.locator.projectLocator
 import io.ktor.http.CacheControl
 import io.ktor.http.ContentType
 import io.ktor.http.Cookie
@@ -26,13 +29,16 @@ import java.net.URI
 fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val host = System.getenv("BIND_HOST") ?: "127.0.0.1"
-    embeddedServer(CIO, host = host, port = port) { module() }.start(wait = true)
+    val locator = locatorFromEnvironment()
+    embeddedServer(CIO, host = host, port = port) { module(locator = locator) }.start(wait = true)
 }
 
 fun Application.module(
     secureCookies: Boolean = System.getenv("COOKIE_SECURE") == "true",
     neighborNames: () -> WebringNeighbors = WebringDirectory()::neighbors,
+    locator: PostgresLocator? = null,
 ) {
+    if (locator != null) projectLocator(locator)
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
