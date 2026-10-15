@@ -76,6 +76,12 @@ class PostgreSQLSetupTests(unittest.TestCase):
 
         # Never test provisioning against a deployed locator DB, even when misconfigured.
         self.assertEqual(url.path, "/locator_test")
+        for target in ("dev", "prod"):
+            name = setup.target_name(target)
+            self.assertEqual(sql(f"SELECT 1 FROM pg_database WHERE datname='{name}';").strip(), "",
+                             "Refusing to test against a pre-existing locator database")
+            self.assertEqual(sql(f"SELECT 1 FROM pg_roles WHERE rolname='{name}';").strip(), "",
+                             "Refusing to test against a pre-existing locator role")
         try:
             with tempfile.TemporaryDirectory() as directory:
                 values, _, _ = setup.prepare_config("dev", Path(directory))
