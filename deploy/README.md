@@ -92,19 +92,19 @@ Inspect services with `systemctl status itzephir@dev` and
 
 ## Other projects on the VM
 
-The loopback gateway at `127.0.0.1:18100` routes `/dev/project/SLUG/` and
-`/project/SLUG/` on `itzephir.com` to independent project containers. Unknown
-projects return 404. The portfolio's application and ACME routes are preserved.
+The `/dev/project/SLUG/` namespace is a section of both websites. Hostname selects
+the environment: `itzephir.com/dev/project/SLUG/` is production;
+`dev.itzephir.com/dev/project/SLUG/` is stage.
 
-`deploy/nginx/project-gateway.conf` owns the gateway. Individual project deployers
-publish only their own `/etc/nginx/projects/SLUG-ENV.conf` snippets. Both deployers
-serialize nginx changes with `/run/lock/itzephir-nginx.lock`. The root publisher
-adds gateway locations to canonical production HTTPS after validating each
-portfolio release; this also preserves routing when deploying an older release
-whose packaged template predates the gateway. Rollback restores the previous
-nginx config, including its gateway locations. Run setup once to install the
-gateway and publisher; `itzephir-apply-nginx --projects` adds routes to the existing
-production without restarting or redeploying the portfolio application.
+`deploy/nginx/project-gateway.conf` defines isolated loopback gateways:
+`18100` includes `/etc/nginx/projects/*-prod.conf`; `18101` includes `*-dev.conf`.
+Unknown projects return 404. Individual project deployers publish only their own
+route snippets and share `/run/lock/itzephir-nginx.lock` with the portfolio publisher.
 
-The first registered project is maintained at `https://github.com/itzephir/minor-web`.
-Its dev/prod containers and deployment credentials are independent of this repo.
+The publisher adds the correct gateway location after validating each packaged
+application configuration, preserving project routes even for older releases.
+`itzephir-apply-nginx --projects` migrates both existing host configurations and
+removes the obsolete `/project/` namespace. Shared nginx and root helper updates
+must run through committed infrastructure CI, including the initial installation.
+The minor-web bootstrap workflow installs these files from the pinned commit;
+normal application CI publishes only its own environment's route.
