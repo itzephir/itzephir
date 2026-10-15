@@ -107,7 +107,7 @@ def main():
         raise PermissionError("Run the committed setup script as root on the deployment VM")
     directory = Path("/etc/itzephir")
     directory.mkdir(mode=0o755, exist_ok=True)
-    with open("/run/lock/itzephir-locator-setup.lock", "w") as lock:
+    with open(directory / ".locator-setup.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if not shutil.which("psql"):
             subprocess.run(["apt-get", "update"], check=True)
