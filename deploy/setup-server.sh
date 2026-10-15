@@ -9,6 +9,9 @@ if ! dpkg-query -W openjdk-21-jre-headless >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jre-headless
 fi
 
+install -d -m 755 /etc/nginx/projects
+install -m 644 nginx/project-gateway.conf /etc/nginx/conf.d/project-gateway.conf
+
 install -d -m 755 /etc/itzephir
 printf 'BIND_HOST=127.0.0.1\nPORT=18080\nCOOKIE_SECURE=true\n' > /etc/itzephir/prod.env
 printf 'BIND_HOST=127.0.0.1\nPORT=18081\nCOOKIE_SECURE=true\n' > /etc/itzephir/dev.env
@@ -29,5 +32,6 @@ install -m 755 apply-nginx.py /usr/local/sbin/itzephir-apply-nginx
 # On a fresh VM, use the checked-in Ktor templates.
 ln -sfn /etc/nginx/sites-available/itzephir.com /etc/nginx/sites-enabled/itzephir.com
 /usr/local/sbin/itzephir-apply-nginx --bootstrap "$PWD/nginx"
+/usr/local/sbin/itzephir-apply-nginx --projects
 systemctl daemon-reload
 systemctl enable itzephir@dev.service itzephir@prod.service

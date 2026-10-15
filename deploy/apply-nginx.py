@@ -62,6 +62,36 @@ def validate_environment(config, target):
         raise ValueError(f"Unexpected {target} backend")
 
 
+
+def without_project_gateway(config):
+    return re.sub(r"    # Managed project gateway;.*?(?=    location / \{)", "", config, flags=re.S)
+
+
+def with_project_gateway(config, target):
+    """The URL namespace stays /dev/project/; the hostname selects the stand."""
+    config = without_project_gateway(config)
+    host = "itzephir.com" if target == "prod" else "dev.itzephir.com"
+    port = 18100 if target == "prod" else 18101
+    locations = f"""    # Managed project gateway; application deployments own their routes.
+    location ^~ /dev/project/ {{
+        proxy_pass http://127.0.0.1:{port};
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }}
+
+"""
+    for block in server_blocks(config):
+        if names(block) == {host} and re.search(r"\blisten\s+(?:\[::\]:)?443\s", block):
+            anchor = "    location / {"
+            if block.count(anchor) != 1:
+                raise ValueError("Expected one canonical portfolio location")
+            return config.replace(block, block.replace(anchor, locations + anchor, 1), 1)
+    raise ValueError("Missing canonical HTTPS server for project routing")
+
+
 def write_atomic(path, content):
     path.parent.mkdir(parents=True, exist_ok=True)
     if content is None:
@@ -141,8 +171,9 @@ class Publisher:
             self.switch(changes)
 
     def publish(self, target, release, source):
-        config = source.read_text()
+        config = without_project_gateway(source.read_text())
         validate_environment(config, target)
+        config = with_project_gateway(config, target)
         destination = self.directory / f"{target}.conf"
         state = self.directory / f".{target}-rollback.json"
         with self.locked():
@@ -169,6 +200,10 @@ def main(args):
     if os.geteuid() != 0:
         raise PermissionError("Run through the configured sudo command")
     publisher = Publisher()
+    if args == ["--projects"]:
+        with publisher.locked():
+            publisher.switch({publisher.directory / f"{target}.conf": with_project_gateway((publisher.directory / f"{target}.conf").read_text(), target).encode() for target in DOMAINS})
+        return
     if len(args) == 2 and args[0] == "--bootstrap":
         publisher.bootstrap(Path(args[1]))
         return
