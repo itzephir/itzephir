@@ -62,7 +62,7 @@ nginx terminates TLS, redirects HTTP/www, supplies security headers, and perform
 gzip compression. Ktor renders HTML, manages theme cookies/cache policy, and
 serves its resources. Application jars and deployment files are never served
 as static files. No Wasm locations, precompressed bundles, Brotli module,
-container runtime, or frontend production toolchain are required. Node/Chrome
+or frontend production toolchain are required by the portfolio. Node/Chrome
 are used only by CI browser tests. The existing Let's Encrypt webroot challenge
 at `/var/www/letsencrypt` remains in place.
 
@@ -89,3 +89,22 @@ bash /srv/itzephir/dev/releases/RELEASE/deploy/activate-release.sh dev RELEASE
 
 Inspect services with `systemctl status itzephir@dev` and
 `journalctl -u itzephir@dev`; replace `dev` with `prod` for production.
+
+## Other projects on the VM
+
+The `/dev/project/SLUG/` namespace is a section of both websites. Hostname selects
+the environment: `itzephir.com/dev/project/SLUG/` is production;
+`dev.itzephir.com/dev/project/SLUG/` is stage.
+
+`deploy/nginx/project-gateway.conf` defines isolated loopback gateways:
+`18100` includes `/etc/nginx/projects/*-prod.conf`; `18101` includes `*-dev.conf`.
+Unknown projects return 404. Individual project deployers publish only their own
+route snippets and share `/run/lock/itzephir-nginx.lock` with the portfolio publisher.
+
+The publisher adds the correct gateway location after validating each packaged
+application configuration, preserving project routes even for older releases.
+`itzephir-apply-nginx --projects` migrates both existing host configurations and
+removes the obsolete `/project/` namespace. Shared nginx and root helper updates
+must run through committed infrastructure CI, including the initial installation.
+The minor-web bootstrap workflow installs these files from the pinned commit;
+normal application CI publishes only its own environment's route.

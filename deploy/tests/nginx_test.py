@@ -48,20 +48,23 @@ class NginxPublishingTest(unittest.TestCase):
         source = self.root / "release.conf"
         source.write_bytes(before.replace(b"gzip_comp_level 6;", b"gzip_comp_level 5;"))
         self.publisher.publish("dev", "release-1", source)
-        self.assertEqual(dev_path.read_bytes(), source.read_bytes())
+        self.assertEqual(dev_path.read_bytes(), nginx.with_project_gateway(source.read_text(), "dev").encode())
         self.assertEqual((self.publisher.directory / "prod.conf").read_bytes(), prod_before)
         self.assertEqual(self.commands, [["nginx", "-t"], ["systemctl", "reload", "nginx"]])
         with self.assertRaises(ValueError):
             self.publisher.rollback("dev", "another-release")
-        self.assertEqual(dev_path.read_bytes(), source.read_bytes())
+        self.assertEqual(dev_path.read_bytes(), nginx.with_project_gateway(source.read_text(), "dev").encode())
         self.publisher.rollback("dev", "release-1")
         self.assertEqual(dev_path.read_bytes(), before)
 
     def test_unchanged_configuration_skips_reload(self):
         self.bootstrap()
         self.publisher.publish("dev", "release-1", DEPLOY / "nginx/dev.conf")
+        self.assertEqual(self.commands, [["nginx", "-t"], ["systemctl", "reload", "nginx"]])
+        self.commands.clear()
+        self.publisher.publish("dev", "release-2", DEPLOY / "nginx/dev.conf")
         self.assertEqual(self.commands, [])
-        self.publisher.rollback("dev", "release-1")
+        self.publisher.rollback("dev", "release-2")
         self.assertEqual(self.commands, [])
 
     def test_validation_or_reload_failure_restores_config_and_previous_rollback(self):
@@ -71,6 +74,7 @@ class NginxPublishingTest(unittest.TestCase):
                 dev_path = self.publisher.directory / "dev.conf"
                 before = dev_path.read_bytes()
                 self.publisher.publish("dev", "older-release", dev_path)
+                before = dev_path.read_bytes()
                 state_path = self.publisher.directory / ".dev-rollback.json"
                 state_before = state_path.read_bytes()
                 source = self.root / "bad.conf"
@@ -91,6 +95,20 @@ class NginxPublishingTest(unittest.TestCase):
         self.assertEqual(self.publisher.site.read_text(), site)
         self.assertFalse((self.publisher.directory / "prod.conf").exists())
         self.assertFalse((self.publisher.directory / "dev.conf").exists())
+
+    def test_production_publish_preserves_project_routes_for_old_release_templates(self):
+        self.bootstrap()
+        source = DEPLOY / "nginx/prod.conf"
+        self.publisher.publish("prod", "release-1", source)
+        actual = (self.publisher.directory / "prod.conf").read_text()
+        self.assertIn("location ^~ /dev/project/", actual)
+        self.assertNotIn("location ^~ /project/", actual)
+        self.assertEqual(actual.count("proxy_pass http://127.0.0.1:18100;"), 1)
+        self.assertIn("proxy_pass http://127.0.0.1:18080;", actual)
+        self.assertEqual(nginx.with_project_gateway(actual, "prod"), actual)
+        dev = nginx.with_project_gateway((DEPLOY / "nginx/dev.conf").read_text(), "dev")
+        self.assertIn("proxy_pass http://127.0.0.1:18101;", dev)
+        self.assertIn("location ^~ /dev/project/", dev)
 
     def test_cross_environment_backends_includes_and_top_level_directives_are_rejected(self):
         dev = (DEPLOY / "nginx/dev.conf").read_text()
