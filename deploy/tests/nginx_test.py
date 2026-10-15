@@ -92,6 +92,18 @@ class NginxPublishingTest(unittest.TestCase):
         self.assertFalse((self.publisher.directory / "prod.conf").exists())
         self.assertFalse((self.publisher.directory / "dev.conf").exists())
 
+    def test_production_publish_preserves_project_routes_for_old_release_templates(self):
+        self.bootstrap()
+        source = DEPLOY / "nginx/prod.conf"
+        self.publisher.publish("prod", "release-1", source)
+        actual = (self.publisher.directory / "prod.conf").read_text()
+        self.assertIn("location ^~ /dev/project/", actual)
+        self.assertIn("location ^~ /project/", actual)
+        self.assertEqual(actual.count("proxy_pass http://127.0.0.1:18100;"), 2)
+        self.assertIn("proxy_pass http://127.0.0.1:18080;", actual)
+        self.assertEqual(nginx.with_project_gateway(actual, "prod"), actual)
+        self.assertEqual(nginx.with_project_gateway(source.read_text(), "dev"), source.read_text())
+
     def test_cross_environment_backends_includes_and_top_level_directives_are_rejected(self):
         dev = (DEPLOY / "nginx/dev.conf").read_text()
         configs = [

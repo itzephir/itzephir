@@ -62,7 +62,7 @@ nginx terminates TLS, redirects HTTP/www, supplies security headers, and perform
 gzip compression. Ktor renders HTML, manages theme cookies/cache policy, and
 serves its resources. Application jars and deployment files are never served
 as static files. No Wasm locations, precompressed bundles, Brotli module,
-container runtime, or frontend production toolchain are required. Node/Chrome
+or frontend production toolchain are required by the portfolio. Node/Chrome
 are used only by CI browser tests. The existing Let's Encrypt webroot challenge
 at `/var/www/letsencrypt` remains in place.
 
@@ -89,3 +89,22 @@ bash /srv/itzephir/dev/releases/RELEASE/deploy/activate-release.sh dev RELEASE
 
 Inspect services with `systemctl status itzephir@dev` and
 `journalctl -u itzephir@dev`; replace `dev` with `prod` for production.
+
+## Other projects on the VM
+
+The loopback gateway at `127.0.0.1:18100` routes `/dev/project/SLUG/` and
+`/project/SLUG/` on `itzephir.com` to independent project containers. Unknown
+projects return 404. The portfolio's application and ACME routes are preserved.
+
+`deploy/nginx/project-gateway.conf` owns the gateway. Individual project deployers
+publish only their own `/etc/nginx/projects/SLUG-ENV.conf` snippets. Both deployers
+serialize nginx changes with `/run/lock/itzephir-nginx.lock`. The root publisher
+adds gateway locations to canonical production HTTPS after validating each
+portfolio release; this also preserves routing when deploying an older release
+whose packaged template predates the gateway. Rollback restores the previous
+nginx config, including its gateway locations. Run setup once to install the
+gateway and publisher; `itzephir-apply-nginx --projects` adds routes to the existing
+production without restarting or redeploying the portfolio application.
+
+The first registered project is maintained at `https://github.com/itzephir/minor-web`.
+Its dev/prod containers and deployment credentials are independent of this repo.
