@@ -24,39 +24,44 @@ fun main() {
     embeddedServer(CIO, host = host, port = port) { module() }.start(wait = true)
 }
 
-fun Application.module(secureCookies: Boolean = System.getenv("COOKIE_SECURE") == "true") {
+fun Application.module(
+    secureCookies: Boolean = System.getenv("COOKIE_SECURE") == "true",
+    neighborNames: () -> WebringNeighbors = WebringDirectory()::neighbors,
+) {
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
             call.respondText("ok", ContentType.Text.Plain)
         }
-        get("/") {
-            call.response.header(HttpHeaders.CacheControl, "no-store")
-            call.response.header(HttpHeaders.Vary, "Cookie, HX-Request, HX-History-Restore-Request")
-            val requestedTheme = call.request.queryParameters["theme"]
-            val theme = if (requestedTheme != null) {
-                Theme.from(requestedTheme) ?: run {
-                    call.respondText("Unknown theme", status = HttpStatusCode.BadRequest)
-                    return@get
+        PortfolioPage.entries.forEach { page ->
+            get(page.path) {
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.response.header(HttpHeaders.Vary, "Cookie, HX-Request, HX-History-Restore-Request")
+                val requestedTheme = call.request.queryParameters["theme"]
+                val theme = if (requestedTheme != null) {
+                    Theme.from(requestedTheme) ?: run {
+                        call.respondText("Unknown theme", status = HttpStatusCode.BadRequest)
+                        return@get
+                    }
+                } else {
+                    Theme.from(call.request.cookies["theme"]) ?: Theme.Dark
                 }
-            } else {
-                Theme.from(call.request.cookies["theme"]) ?: Theme.Dark
-            }
-            if (requestedTheme != null) {
-                call.response.cookies.append(
-                    Cookie(
-                        name = "theme", value = theme.value, path = "/", maxAge = 31_536_000,
-                        httpOnly = true, secure = secureCookies, extensions = mapOf("SameSite" to "Lax"),
-                    ),
-                )
-            }
-            // History cache misses require a complete document, even when HX-Request is set.
-            val fragment = call.request.headers["HX-Request"] == "true" &&
-                call.request.headers["HX-History-Restore-Request"] != "true"
-            if (fragment) {
-                call.respondHtmlPartial { portfolio(theme) }
-            } else {
-                call.respondHtml { document(theme) }
+                if (requestedTheme != null) {
+                    call.response.cookies.append(
+                        Cookie(
+                            name = "theme", value = theme.value, path = "/", maxAge = 31_536_000,
+                            httpOnly = true, secure = secureCookies, extensions = mapOf("SameSite" to "Lax"),
+                        ),
+                    )
+                }
+                // History cache misses require a complete document, even when HX-Request is set.
+                val fragment = call.request.headers["HX-Request"] == "true" &&
+                    call.request.headers["HX-History-Restore-Request"] != "true"
+                if (fragment) {
+                    call.respondHtmlPartial { portfolio(theme, page, neighborNames()) }
+                } else {
+                    call.respondHtml { document(theme, page, neighborNames()) }
+                }
             }
         }
         get("/index.html") { call.respondRedirect("/", permanent = true) }
