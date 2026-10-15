@@ -5,6 +5,7 @@ import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
+import io.ktor.client.request.patch
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
@@ -35,40 +36,10 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 private const val ROOT = "/api/project-locator/v1"
-private const val ADMIN = "local-test-admin-token-not-used-in-any-deployment-0001"
+private const val ADMIN = TEST_ADMIN
 
 /** Real PostgreSQL, including constraints, transactions, persistence and concurrent requests. */
-class LocatorTest {
-    private lateinit var source: PGSimpleDataSource
-    private lateinit var locator: PostgresLocator
-    private lateinit var schema: String
-
-    @BeforeEach
-    fun setup() {
-        val url = System.getenv("LOCATOR_TEST_DATABASE_URL")
-        if (System.getenv("LOCATOR_REQUIRE_DATABASE_TESTS") == "true") requireNotNull(url) { "CI must provide PostgreSQL" }
-        assumeTrue(url != null, "Set LOCATOR_TEST_DATABASE_URL to run PostgreSQL integration tests")
-        schema = "locator_test_" + UUID.randomUUID().toString().replace("-", "")
-        source = PGSimpleDataSource().apply {
-            setURL(url!!)
-            user = System.getenv("LOCATOR_TEST_DATABASE_USER") ?: "locator"
-            password = System.getenv("LOCATOR_TEST_DATABASE_PASSWORD") ?: ""
-            connectTimeout = 5
-            socketTimeout = 10
-        }
-        source.connection.use { it.createStatement().use { statement -> statement.execute("CREATE SCHEMA $schema") } }
-        source.currentSchema = schema
-        locator = PostgresLocator(source)
-        runBlocking { locator.initialize(ADMIN) }
-    }
-
-    @AfterEach
-    fun cleanup() {
-        if (::source.isInitialized && ::schema.isInitialized) {
-            source.connection.use { it.createStatement().use { statement -> statement.execute("DROP SCHEMA IF EXISTS $schema CASCADE") } }
-        }
-    }
-
+class LocatorTest : LocatorDatabaseTest() {
     @Test
     fun `registration reserves project and slug but needs administrator approval`() = testApplication {
         application { projectLocator(locator) }
@@ -117,7 +88,7 @@ class LocatorTest {
     }
 
     @Test
-    fun `project identity cannot approve list or inspect another project`() = testApplication {
+    fun `project identity lists only its project and cannot approve or inspect another project`() = testApplication {
         application { projectLocator(locator) }
         val registration = client.register().json()
         val token = registration.string("token")
@@ -125,7 +96,10 @@ class LocatorTest {
         val other = client.register("second", "second").json().getValue("project").jsonObject.string("id")
         assertEquals(HttpStatusCode.Forbidden, client.post("$ROOT/projects/$id/approve") { bearer(token) }.status)
         assertEquals(HttpStatusCode.Forbidden, client.post("$ROOT/projects/$id/reject") { bearer(token) }.status)
-        assertEquals(HttpStatusCode.Forbidden, client.get("$ROOT/projects") { bearer(token) }.status)
+        val owned = client.get("$ROOT/projects") { bearer(token) }
+        assertEquals(HttpStatusCode.OK, owned.status)
+        val list = Json.parseToJsonElement(owned.bodyAsText()).jsonArray
+        assertEquals(listOf(id), list.map { it.jsonObject.string("id") })
         assertEquals(HttpStatusCode.NotFound, client.get("$ROOT/projects/$other") { bearer(token) }.status)
         assertEquals(HttpStatusCode.NotFound, client.post("$ROOT/projects/$other/identity/rotate") { bearer(token) }.status)
         assertEquals(HttpStatusCode.Forbidden, client.register("third", "third", token).status)
@@ -236,6 +210,94 @@ class LocatorTest {
         results.filter { it.isFailure }.forEach { assertEquals(409, (it.exceptionOrNull() as LocatorException).status) }
         source.connection.use { connection ->
             connection.createStatement().use { it.executeQuery("SELECT count(*) FROM locator_identities").use { row -> row.next(); assertEquals(2, row.getInt(1)) } }
+        }
+    }
+
+    @Test
+    fun `owners edit only their own project and metadata changes require fresh approval`() = testApplication {
+        application { projectLocator(locator) }
+        val registration = client.register().json()
+        val token = registration.string("token")
+        val id = registration.getValue("project").jsonObject.string("id")
+        val reviewed = client.post("$ROOT/projects/$id/approve") { bearer(ADMIN) }.json()
+        val other = client.register("other", "other").json().getValue("project").jsonObject.string("id")
+        val forbidden = client.patch("$ROOT/projects/$other") {
+            bearer(token); contentType(ContentType.Application.Json); setBody("""{"project":"stolen","slug":"stolen","revision":0}""")
+        }
+        assertEquals(HttpStatusCode.NotFound, forbidden.status)
+        val updated = client.patch("$ROOT/projects/$id") {
+            bearer(token); contentType(ContentType.Application.Json)
+            setBody("""{"project":"minor-renamed","slug":"new_slug","revision":${reviewed.string("revision")}}""")
+        }
+        assertEquals(HttpStatusCode.OK, updated.status)
+        val project = updated.json()
+        assertEquals("pending", project.string("status"))
+        assertEquals(registration.getValue("project").jsonObject.string("identityId"), project.string("identityId"))
+        assertEquals(HttpStatusCode.NotFound, client.get("$ROOT/resolve/minor_web").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("$ROOT/resolve/new_slug").status)
+        assertEquals("null", project.string("reviewedBy"))
+        assertEquals(HttpStatusCode.Conflict, client.patch("$ROOT/projects/$id") {
+            bearer(token); contentType(ContentType.Application.Json); setBody("""{"project":"stale","slug":"stale","revision":${reviewed.string("revision")}}""")
+        }.status)
+        assertEquals(HttpStatusCode.BadRequest, client.patch("$ROOT/projects/$id") {
+            bearer(token); contentType(ContentType.Application.Json); setBody("""{"project":"safe","slug":"safe","revision":${project.string("revision")},"status":"approved"}""")
+        }.status)
+    }
+
+    @Test
+    fun `admin can edit any approved project without resetting its approval`() = runBlocking {
+        val admin = assertNotNull(locator.authenticate(ADMIN))
+        val registration = locator.register(ProjectRequest("owned", "owned"), admin)
+        val updated = locator.update(UUID.fromString(registration.project.id), ProjectUpdate("renamed", "renamed", 0), admin)
+        assertEquals(ProjectStatus.APPROVED, updated.status)
+        assertEquals(registration.project.identityId, updated.identityId)
+        assertNotNull(locator.resolve("renamed"))
+    }
+
+    @Test
+    fun `stale admin review cannot approve project data changed after the form was rendered`() = runBlocking {
+        val admin = assertNotNull(locator.authenticate(ADMIN))
+        val registration = locator.register(ProjectRequest("owned", "owned"), null)
+        locator.update(UUID.fromString(registration.project.id), ProjectUpdate("changed", "changed", 0), registration.identity)
+        val failure = runCatching { locator.review(UUID.fromString(registration.project.id), ProjectStatus.APPROVED, admin, revision = 0) }.exceptionOrNull()
+        assertEquals("stale_project", (failure as LocatorException).code)
+        assertNull(locator.resolve("changed"))
+    }
+
+    @Test
+    fun `panel migration upgrades a v1 registry without losing projects or service credentials`() = runBlocking {
+        val upgradeSchema = "locator_upgrade_" + UUID.randomUUID().toString().replace("-", "")
+        val legacySource = PGSimpleDataSource().apply {
+            setURL(source.getURL()); user = source.user; password = source.password; currentSchema = upgradeSchema
+        }
+        source.connection.use { it.createStatement().use { query -> query.execute("CREATE SCHEMA $upgradeSchema") } }
+        try {
+            val identityId = UUID.randomUUID()
+            val projectId = UUID.randomUUID()
+            val credential = Tokens.issue()
+            legacySource.connection.use { connection ->
+                val initial = javaClass.getResource("/db/locator/001-initial.sql")!!.readText()
+                connection.createStatement().use { query ->
+                    query.execute(initial)
+                    query.execute("CREATE TABLE locator_schema_migrations (version integer PRIMARY KEY, checksum char(64) NOT NULL)")
+                }
+                connection.prepareStatement("INSERT INTO locator_schema_migrations VALUES (1, ?)").use { it.setString(1, Tokens.hash(initial)); it.executeUpdate() }
+                connection.prepareStatement("INSERT INTO locator_identities (id, role, token_hash) VALUES (?, 'project', ?)").use {
+                    it.setObject(1, identityId); it.setString(2, Tokens.hash(credential)); it.executeUpdate()
+                }
+                connection.prepareStatement("INSERT INTO locator_projects (id, project, slug, identity_id, status) VALUES (?, 'legacy', 'legacy', ?, 'pending')").use {
+                    it.setObject(1, projectId); it.setObject(2, identityId); it.executeUpdate()
+                }
+            }
+            val upgraded = PostgresLocator(legacySource)
+            upgraded.initialize(ADMIN)
+            val service = upgraded.authenticate(credential)!!
+            assertEquals(identityId.toString(), service.id)
+            assertEquals("legacy", upgraded.get(projectId, service).slug)
+            assertEquals(0, upgraded.get(projectId, service).revision)
+            WebAccounts(upgraded).bootstrapAdmin("admin", "a-valid-migration-test-password", null)
+        } finally {
+            source.connection.use { it.createStatement().use { query -> query.execute("DROP SCHEMA $upgradeSchema CASCADE") } }
         }
     }
 

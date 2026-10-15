@@ -17,23 +17,34 @@ import io.ktor.server.response.respond
 import io.ktor.server.routing.delete
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
+import io.ktor.server.routing.patch
+import io.ktor.server.request.path
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 
-fun Application.projectLocator(locator: PostgresLocator) {
+fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean = true, panelAuth: PanelAuth? = null) {
     install(ContentNegotiation) { json(Json { encodeDefaults = true }) }
     install(StatusPages) {
         exception<LocatorException> { call, error ->
             call.response.header(HttpHeaders.CacheControl, "no-store")
+            if (call.request.path().startsWith("/dev/panel")) {
+                call.panelError(error)
+                return@exception
+            }
             if (error.status == 401) call.response.header(HttpHeaders.WWWAuthenticate, "Bearer realm=\"project-locator\"")
             call.respond(HttpStatusCode.fromValue(error.status), ApiError(error.code, error.message))
         }
         exception<BadRequestException> { call, _ ->
             call.response.header(HttpHeaders.CacheControl, "no-store")
+            if (call.request.path().startsWith("/dev/panel")) {
+                call.panelError(LocatorException(400, "invalid_request", "Invalid request"))
+                return@exception
+            }
             call.respond(HttpStatusCode.BadRequest, ApiError("invalid_request", "Expected a valid JSON request"))
         }
     }
+    locatorPanel(locator, secureCookies, panelAuth)
     routing {
         route("/api/project-locator/v1") {
             install(createRouteScopedPlugin("LocatorResponseHeaders") {
@@ -49,7 +60,6 @@ fun Application.projectLocator(locator: PostgresLocator) {
             get("/identity") { call.respond(call.identity(locator)!!) }
             get("/projects") {
                 val actor = call.identity(locator)!!
-                requireAdmin(actor)
                 val status = call.request.queryParameters["status"]?.let { value ->
                     ProjectStatus.entries.firstOrNull { it.databaseValue == value }
                         ?: throw LocatorException(400, "invalid_status", "Expected pending, approved or rejected")
@@ -61,6 +71,11 @@ fun Application.projectLocator(locator: PostgresLocator) {
             get("/projects/{id}") {
                 val actor = call.identity(locator)!!
                 call.respond(locator.get(parseId(call.parameters["id"]!!), actor))
+            }
+            patch("/projects/{id}") {
+                val actor = call.identity(locator)!!
+                val request = call.receive<ProjectUpdate>()
+                call.respond(locator.update(parseId(call.parameters["id"]!!), request, actor))
             }
             post("/projects/{id}/approve") {
                 val actor = call.identity(locator)!!

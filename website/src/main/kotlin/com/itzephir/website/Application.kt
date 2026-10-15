@@ -1,6 +1,8 @@
 package com.itzephir.website
 
 import com.itzephir.locator.PostgresLocator
+import com.itzephir.locator.PanelAuth
+import com.itzephir.locator.panelAuthFromEnvironment
 import com.itzephir.locator.locatorFromEnvironment
 import com.itzephir.locator.projectLocator
 import io.ktor.http.CacheControl
@@ -30,15 +32,17 @@ fun main() {
     val port = System.getenv("PORT")?.toIntOrNull() ?: 8080
     val host = System.getenv("BIND_HOST") ?: "127.0.0.1"
     val locator = locatorFromEnvironment()
-    embeddedServer(CIO, host = host, port = port) { module(locator = locator) }.start(wait = true)
+    val panelAuth = locator?.let { panelAuthFromEnvironment(it) }
+    embeddedServer(CIO, host = host, port = port) { module(locator = locator, panelAuth = panelAuth) }.start(wait = true)
 }
 
 fun Application.module(
     secureCookies: Boolean = System.getenv("COOKIE_SECURE") == "true",
     neighborNames: () -> WebringNeighbors = WebringDirectory()::neighbors,
     locator: PostgresLocator? = null,
+    panelAuth: PanelAuth? = null,
 ) {
-    if (locator != null) projectLocator(locator)
+    if (locator != null) projectLocator(locator, secureCookies, panelAuth)
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
