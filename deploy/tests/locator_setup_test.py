@@ -14,6 +14,19 @@ spec.loader.exec_module(setup)
 
 
 class ConfigurationTests(unittest.TestCase):
+    def test_systemd_drop_in_is_readable_even_with_private_bootstrap_umask(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous = os.umask(0o077)
+            try:
+                setup.install_drop_in("dev", Path("/etc/itzephir/locator-dev.env"), root)
+            finally:
+                os.umask(previous)
+            drop_in = root / "itzephir@dev.service.d/locator.conf"
+            self.assertEqual(stat.S_IMODE(drop_in.parent.stat().st_mode), 0o755)
+            self.assertEqual(stat.S_IMODE(drop_in.stat().st_mode), 0o644)
+            self.assertIn("EnvironmentFile=/etc/itzephir/locator-dev.env", drop_in.read_text())
+
     def test_secrets_survive_retry_and_environments_are_separate(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
