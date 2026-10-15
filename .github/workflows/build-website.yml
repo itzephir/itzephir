@@ -71,9 +71,10 @@ jobs:
           ./gradlew check :website:installDist
           mkdir -p website/build/install/website/deploy
           cp deploy/activate-release.sh website/build/install/website/deploy/
+          touch website/build/install/website/deploy/require-locator
           cp -R deploy/nginx website/build/install/website/nginx
 
-      - name: Check nginx publishing and rollback
+      - name: Check infrastructure provisioning, nginx and rollback
         run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
 
       - name: Check shell ownership, navigation and responsive contract in Chrome
@@ -158,8 +159,9 @@ jobs:
           if ! ssh -i ~/.ssh/itzephir_deploy -o BatchMode=yes "$DEPLOY_USER@$DEPLOY_HOST" \
             "test -x /usr/bin/java && test -r /etc/itzephir/$TARGET.env && \
              test -x /usr/local/sbin/itzephir-apply-nginx && test -r /etc/nginx/itzephir/$TARGET.conf && \
+             test -f /etc/itzephir/locator-$TARGET.env && \
              systemctl cat 'itzephir@$TARGET.service' >/dev/null"; then
-            echo "Ktor VM setup is required; run deploy/setup-server.sh as described in deploy/README.md." >&2
+            echo "VM setup is required; run committed deploy/setup-server.sh and deploy/setup-locator.py TARGET as described in deploy/README.md." >&2
             exit 1
           fi
 

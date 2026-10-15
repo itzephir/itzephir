@@ -26,9 +26,9 @@ async function fixture(staticPrevious = false) {
     await writeFile(join(previous, staticPrevious ? 'index.html' : 'lib/website.jar'), 'previous');
     await symlink(previous, join(base, 'current'));
     await writeFile(join(bin, 'sudo'), '#!/bin/sh\nif [ "$1" = -n ]; then shift; fi\nprintf "%s\\n" "$*" >> "$ACTIVATION_LOG"\nif [ "$MOCK_NGINX" = fail ] && [ "$1" = /usr/local/sbin/itzephir-apply-nginx ] && [ "$4" != --rollback ]; then exit 1; fi\n', { mode: 0o755 });
-    await writeFile(join(bin, 'curl'), '#!/bin/sh\ncase "$*" in\n  *healthz*) [ "$MOCK_HEALTH" = fail ] && exit 22; printf ok ;;\n  *) [ "$MOCK_HTTPS" = fail ] && exit 22; exit 0 ;;\nesac\n', { mode: 0o755 });
+    await writeFile(join(bin, 'curl'), '#!/bin/sh\nprintf "%s\\n" "$*" >> "$HTTP_LOG"\ncase "$*" in\n  *healthz*) [ "$MOCK_HEALTH" = fail ] && exit 22; printf ok ;;\n  *https://dev.itzephir.com/dev*) [ "$MOCK_LOCATOR" = fail ] && exit 22; exit 0 ;;\n  *) [ "$MOCK_HTTPS" = fail ] && exit 22; exit 0 ;;\nesac\n', { mode: 0o755 });
     await writeFile(join(bin, 'sleep'), '#!/bin/sh\nexit 0\n', { mode: 0o755 });
-    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, RELEASE_ROOT: root, ACTIVATION_LOG: join(root, 'operations') };
+    const env = { ...process.env, PATH: `${bin}:${process.env.PATH}`, RELEASE_ROOT: root, ACTIVATION_LOG: join(root, 'operations'), HTTP_LOG: join(root, 'http'), LOCATOR_CONFIG_ROOT: join(root, 'config') };
     return { root, base, previous, candidate, env };
 }
 
@@ -40,6 +40,51 @@ test('healthy deployment activates the candidate and restarts only its environme
         assert.deepEqual((await readFile(f.env.ACTIVATION_LOG, 'utf8')).trim().split('\n'), [
             '/usr/bin/systemctl restart itzephir@dev.service',
             `/usr/local/sbin/itzephir-apply-nginx dev ${release}`,
+        ]);
+    } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+async function requireLocator(f, configured = true) {
+    await mkdir(join(f.candidate, 'deploy'));
+    await writeFile(join(f.candidate, 'deploy/require-locator'), '');
+    if (configured) {
+        await mkdir(f.env.LOCATOR_CONFIG_ROOT);
+        await writeFile(join(f.env.LOCATOR_CONFIG_ROOT, 'locator-dev.env'), 'test configuration');
+    }
+}
+
+test('locator deployment requires VM configuration before changing the active release', async () => {
+    const f = await fixture();
+    try {
+        await requireLocator(f, false);
+        await assert.rejects(run('bash', [script, 'dev', release], { env: f.env }), /Locator is required/);
+        assert.equal(await readlink(join(f.base, 'current')), f.previous);
+    } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('locator deployment verifies its landing, login and stylesheet through HTTPS', async () => {
+    const f = await fixture();
+    try {
+        await requireLocator(f);
+        await run('bash', [script, 'dev', release], { env: f.env });
+        const requests = await readFile(f.env.HTTP_LOG, 'utf8');
+        for (const path of ['/dev', '/dev/panel', '/dev/assets/style.css']) {
+            assert.ok(requests.includes(`https://dev.itzephir.com${path}\n`));
+        }
+        assert.equal(await readlink(join(f.base, 'current')), f.candidate);
+    } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('a missing locator route rolls back both application and nginx', async () => {
+    const f = await fixture();
+    try {
+        await requireLocator(f);
+        await assert.rejects(run('bash', [script, 'dev', release], { env: { ...f.env, MOCK_LOCATOR: 'fail' } }));
+        assert.equal(await readlink(join(f.base, 'current')), f.previous);
+        const operations = (await readFile(f.env.ACTIVATION_LOG, 'utf8')).trim().split('\n');
+        assert.deepEqual(operations.slice(-2), [
+            '/usr/bin/systemctl restart itzephir@dev.service',
+            `/usr/local/sbin/itzephir-apply-nginx dev ${release} --rollback`,
         ]);
     } finally { await rm(f.root, { recursive: true, force: true }); }
 });

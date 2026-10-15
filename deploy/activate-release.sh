@@ -15,6 +15,10 @@ candidate="$base/releases/$release"
 service="itzephir@$target.service"
 [[ -f "$candidate/lib/website.jar" ]] || { echo "Missing website.jar" >&2; exit 1; }
 [[ -f "$candidate/nginx/$target.conf" ]] || { echo "Missing nginx configuration" >&2; exit 1; }
+if [[ -f "$candidate/deploy/require-locator" && ! -f "${LOCATOR_CONFIG_ROOT:-/etc/itzephir}/locator-$target.env" ]]; then
+    echo "Locator is required by this release; run committed deploy/setup-locator.py $target first" >&2
+    exit 1
+fi
 previous="$(readlink -f "$base/current" || true)"
 nginx_applied=false
 
@@ -65,6 +69,12 @@ sudo -n /usr/local/sbin/itzephir-apply-nginx "$target" "$release" || rollback
 nginx_applied=true
 curl --silent --show-error --fail --max-time 10 \
     --resolve "$site_host:443:127.0.0.1" "https://$site_host/" >/dev/null || rollback
+if [[ -f "$candidate/deploy/require-locator" ]]; then
+    for path in /dev /dev/panel /dev/assets/style.css; do
+        curl --silent --show-error --fail --max-time 10 \
+            --resolve "$site_host:443:127.0.0.1" "https://$site_host$path" >/dev/null || rollback
+    done
+fi
 
 # Retain the current and immediately previous releases even if older than a week.
 find "$base/releases" -mindepth 1 -maxdepth 1 -type d \
