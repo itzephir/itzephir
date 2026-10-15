@@ -19,6 +19,7 @@ enum class ProjectStatus {
 @Serializable
 enum class IdentityRole {
     @SerialName("project") PROJECT,
+    @SerialName("owner") OWNER,
     @SerialName("admin") ADMIN;
 
     val databaseValue get() = name.lowercase()
@@ -36,6 +37,14 @@ data class ProjectRequest(val project: String, val slug: String) {
 }
 
 @Serializable
+data class ProjectUpdate(val project: String, val slug: String, val revision: Int) {
+    fun validate() {
+        ProjectRequest(project, slug).validate()
+        if (revision < 0) throw LocatorException(400, "invalid_revision", "Invalid project revision")
+    }
+}
+
+@Serializable
 data class Project(
     val id: String,
     val project: String,
@@ -45,6 +54,7 @@ data class Project(
     val createdAt: String,
     val reviewedAt: String? = null,
     val reviewedBy: String? = null,
+    val revision: Int = 0,
 ) {
     val productionUrl get() = "https://itzephir.com/dev/project/$slug/"
     val stageUrl get() = "https://dev.itzephir.com/dev/project/$slug/"

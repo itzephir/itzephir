@@ -21,18 +21,22 @@ class PostgresLocator(private val dataSource: DataSource) {
             connection.createStatement().use {
                 it.execute("CREATE TABLE IF NOT EXISTS locator_schema_migrations (version integer PRIMARY KEY, checksum char(64) NOT NULL, installed_at timestamptz NOT NULL DEFAULT now())")
             }
-            val migration = checkNotNull(javaClass.getResource("/db/locator/001-initial.sql")).readText()
-            val checksum = Tokens.hash(migration)
-            val installed = connection.prepareStatement("SELECT checksum FROM locator_schema_migrations WHERE version = 1").use { query ->
-                query.executeQuery().use { if (it.next()) it.getString(1) else null }
-            }
-            if (installed == null) {
-                connection.createStatement().use { it.execute(migration) }
-                connection.prepareStatement("INSERT INTO locator_schema_migrations (version, checksum) VALUES (1, ?)").use {
-                    it.setString(1, checksum); it.executeUpdate()
+            listOf("001-initial.sql", "002-panel.sql").forEachIndexed { index, name ->
+                val version = index + 1
+                val migration = checkNotNull(javaClass.getResource("/db/locator/$name")).readText()
+                val checksum = Tokens.hash(migration)
+                val installed = connection.prepareStatement("SELECT checksum FROM locator_schema_migrations WHERE version = ?").use { query ->
+                    query.setInt(1, version)
+                    query.executeQuery().use { if (it.next()) it.getString(1) else null }
                 }
-            } else {
-                check(installed == checksum) { "Previously applied locator migration was modified" }
+                if (installed == null) {
+                    connection.createStatement().use { it.execute(migration) }
+                    connection.prepareStatement("INSERT INTO locator_schema_migrations (version, checksum) VALUES (?, ?)").use {
+                        it.setInt(1, version); it.setString(2, checksum); it.executeUpdate()
+                    }
+                } else {
+                    check(installed == checksum) { "Previously applied locator migration $version was modified" }
+                }
             }
             // A stable admin identity survives restarts; changing the environment token rotates its credential.
             connection.prepareStatement("""
@@ -87,26 +91,59 @@ class PostgresLocator(private val dataSource: DataSource) {
     suspend fun get(id: UUID, actor: Identity): Project = transaction { ownedProject(it, id, actor) }
 
     suspend fun list(actor: Identity, status: ProjectStatus?, limit: Int, offset: Int): List<Project> {
-        requireAdmin(actor)
         return transaction { connection ->
-            connection.prepareStatement("SELECT * FROM locator_projects WHERE (?::text IS NULL OR status = ?) ORDER BY created_at DESC, id LIMIT ? OFFSET ?").use {
-                it.setString(1, status?.databaseValue); it.setString(2, status?.databaseValue); it.setInt(3, limit); it.setInt(4, offset)
+            connection.prepareStatement("SELECT * FROM locator_projects WHERE (?::text IS NULL OR status = ?) AND (? OR identity_id = ? OR EXISTS (SELECT 1 FROM locator_project_owners o WHERE o.project_id = locator_projects.id AND o.user_id = ?)) ORDER BY created_at DESC, id LIMIT ? OFFSET ?").use {
+                it.setString(1, status?.databaseValue); it.setString(2, status?.databaseValue)
+                it.setBoolean(3, actor.role == IdentityRole.ADMIN); it.setObject(4, UUID.fromString(actor.id))
+                it.setObject(5, UUID.fromString(actor.id)); it.setInt(6, limit); it.setInt(7, offset)
                 it.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.project()) } }
             }
         }
     }
 
-    suspend fun review(id: UUID, status: ProjectStatus, actor: Identity): Project {
+    suspend fun review(id: UUID, status: ProjectStatus, actor: Identity, revision: Int? = null): Project {
         requireAdmin(actor)
         require(status != ProjectStatus.PENDING)
         return transaction { connection ->
             val project = ownedProject(connection, id, actor, lock = true)
+            if (revision != null && project.revision != revision) throw LocatorException(409, "stale_project", "Project changed; reload before reviewing")
             if (project.status == status) return@transaction project
             if (project.status != ProjectStatus.PENDING) throw LocatorException(409, "already_reviewed", "This request has already been reviewed")
-            connection.prepareStatement("UPDATE locator_projects SET status = ?, reviewed_at = now(), reviewed_by = ? WHERE id = ? RETURNING *").use {
+            connection.prepareStatement("UPDATE locator_projects SET status = ?, reviewed_at = now(), reviewed_by = ?, revision = revision + 1 WHERE id = ? RETURNING *").use {
                 it.setString(1, status.databaseValue); it.setObject(2, UUID.fromString(actor.id)); it.setObject(3, id)
                 it.executeQuery().use { rows -> check(rows.next()); rows.project() }
             }
+        }
+    }
+
+    suspend fun update(id: UUID, request: ProjectUpdate, actor: Identity): Project {
+        request.validate()
+        return transaction { connection ->
+            val before = ownedProject(connection, id, actor, lock = true)
+            if (before.revision != request.revision) throw LocatorException(409, "stale_project", "Project changed; reload before editing")
+            if (before.project == request.project && before.slug == request.slug) return@transaction before
+            val needsReview = actor.role != IdentityRole.ADMIN
+            connection.prepareStatement("""
+                UPDATE locator_projects SET project = ?, slug = ?, revision = revision + 1,
+                status = CASE WHEN ? THEN 'pending' ELSE status END,
+                reviewed_at = CASE WHEN ? THEN NULL ELSE reviewed_at END,
+                reviewed_by = CASE WHEN ? THEN NULL ELSE reviewed_by END
+                WHERE id = ? RETURNING *
+            """.trimIndent()).use {
+                it.setString(1, request.project); it.setString(2, request.slug)
+                it.setBoolean(3, needsReview); it.setBoolean(4, needsReview); it.setBoolean(5, needsReview); it.setObject(6, id)
+                it.executeQuery().use { rows -> check(rows.next()); rows.project() }
+            }
+        }
+    }
+
+    suspend fun publicProjects(limit: Int, offset: Int): List<Project> = transaction { connection ->
+        connection.prepareStatement("""
+            SELECT p.* FROM locator_projects p JOIN locator_identities i ON i.id = p.identity_id
+            WHERE p.status = 'approved' AND i.revoked_at IS NULL ORDER BY p.created_at DESC, p.id LIMIT ? OFFSET ?
+        """.trimIndent()).use {
+            it.setInt(1, limit); it.setInt(2, offset)
+            it.executeQuery().use { rows -> buildList { while (rows.next()) add(rows.project()) } }
         }
     }
 
@@ -141,17 +178,15 @@ class PostgresLocator(private val dataSource: DataSource) {
     }
 
     private fun ownedProject(connection: Connection, id: UUID, actor: Identity, lock: Boolean = false): Project {
-        val project = connection.prepareStatement("SELECT * FROM locator_projects WHERE id = ?" + if (lock) " FOR UPDATE" else "").use {
-            it.setObject(1, id)
+        val project = connection.prepareStatement("SELECT * FROM locator_projects WHERE id = ? AND (? OR identity_id = ? OR EXISTS (SELECT 1 FROM locator_project_owners o WHERE o.project_id = locator_projects.id AND o.user_id = ?))" + if (lock) " FOR UPDATE" else "").use {
+            it.setObject(1, id); it.setBoolean(2, actor.role == IdentityRole.ADMIN)
+            it.setObject(3, UUID.fromString(actor.id)); it.setObject(4, UUID.fromString(actor.id))
             it.executeQuery().use { rows -> if (rows.next()) rows.project() else null }
         } ?: throw LocatorException(404, "project_not_found", "Project not found")
-        if (actor.role != IdentityRole.ADMIN && actor.id != project.identityId) {
-            throw LocatorException(404, "project_not_found", "Project not found")
-        }
         return project
     }
 
-    private suspend fun <T> transaction(block: (Connection) -> T): T = withContext(dispatcher) {
+    internal suspend fun <T> transaction(block: (Connection) -> T): T = withContext(dispatcher) {
         try {
             dataSource.connection.use { connection ->
                 connection.autoCommit = false
@@ -172,7 +207,7 @@ class PostgresLocator(private val dataSource: DataSource) {
     private fun ResultSet.project() = Project(
         getString("id"), getString("project"), getString("slug"), getString("identity_id"),
         ProjectStatus.valueOf(getString("status").uppercase()), getTimestamp("created_at").toInstant().toString(),
-        getTimestamp("reviewed_at")?.toInstant()?.toString(), getString("reviewed_by"),
+        getTimestamp("reviewed_at")?.toInstant()?.toString(), getString("reviewed_by"), getInt("revision"),
     )
 
     companion object { private val ADMIN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001") }
