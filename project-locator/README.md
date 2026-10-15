@@ -161,8 +161,11 @@ LOCATOR_ADMIN_GITHUB_ID=IMMUTABLE_NUMERIC_GITHUB_USER_ID
 ```
 
 The systemd unit optionally loads `/etc/itzephir/locator-dev.env` or
-`locator-prod.env`. Provision those files through the committed infrastructure
-pipeline, owned by root with group `deploy` and mode `0640`. Never commit actual
+`locator-prod.env`. The versioned `deploy/setup-locator.py dev|prod` bootstrap
+creates dedicated databases and generates these files on the VM, owned by root
+with mode `0600`. It installs a required systemd drop-in for the selected stand,
+including older VM installations, and leaves activation to normal CI. Production
+needs its own setup before merging. Never commit actual
 credentials. PostgreSQL and the two admin tokens must remain separate between
 stage and production. Changing the admin token and restarting rotates its
 credential while preserving the admin identity UUID and review history.
@@ -174,8 +177,10 @@ Neither `repo` nor email scope is requested for GitHub login. An API-only regist
 can omit all web-auth variables: the public landing still works, and the panel
 shows an unavailable page. Partial web-auth configuration fails startup.
 
-No locator variables means the optional API is disabled and the portfolio runs
-normally. Partial or invalid configuration stops startup. A configured database
+No locator variables means the optional API is disabled for local portfolio use.
+Packaged locator releases require VM configuration and verify `/dev`, the panel
+and CSS after activation, so an unconfigured stand cannot pass deployment.
+Partial or invalid configuration stops startup. A configured database
 that cannot be reached also fails startup, allowing the existing deployment
 health check to roll back; it never silently falls back to an in-memory registry.
 
