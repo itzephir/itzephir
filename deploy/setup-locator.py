@@ -98,6 +98,15 @@ def peer_sql(statement, sensitive=False):
     return result.stdout
 
 
+def install_drop_in(target, configuration, unit_root=Path("/etc/systemd/system")):
+    target_name(target)
+    drop_in = unit_root / f"itzephir@{target}.service.d/locator.conf"
+    write_private(drop_in, f"[Unit]\nAfter=postgresql.service\n\n[Service]\nEnvironmentFile={configuration}\n")
+    # Bootstrap is normally invoked with umask 077; systemctl cat must still work as deploy.
+    drop_in.parent.chmod(0o755)
+    drop_in.chmod(0o644)
+
+
 def main():
     if len(sys.argv) != 2:
         raise ValueError("Usage: setup-locator.py dev|prod")
@@ -124,9 +133,7 @@ def main():
             source.replace(active)
         active.chmod(0o600)
         # A required, per-environment drop-in also supports VMs bootstrapped before locator existed.
-        drop_in = Path(f"/etc/systemd/system/itzephir@{target}.service.d/locator.conf")
-        write_private(drop_in, f"[Unit]\nAfter=postgresql.service\n\n[Service]\nEnvironmentFile={active}\n")
-        drop_in.chmod(0o644)
+        install_drop_in(target, active)
         subprocess.run(["systemctl", "daemon-reload"], check=True)
     print(f"Locator {target} prepared. Credentials remain in {active}; activate the application through CI.")
 
