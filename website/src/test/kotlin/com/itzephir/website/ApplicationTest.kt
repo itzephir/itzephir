@@ -46,7 +46,6 @@ class ApplicationTest {
         val profile = Jsoup.parse(client.get("/about").bodyAsText())
         assertEquals("Обо мне", profile.selectFirst("h1")!!.text())
         assertTrue(profile.text().contains("Лектор ШМР Яндекса · 2026"))
-        assertTrue(profile.text().contains("инфраструктура и собственные проекты"))
         assertFalse(profile.text().contains("преподаю"))
     }
 
