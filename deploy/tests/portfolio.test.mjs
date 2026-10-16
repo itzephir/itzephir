@@ -55,6 +55,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                 for (const path of ['/', '/projects', '/about']) {
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
                     const actualHeader = await headerGeometry(page);
+                    assert.equal(await page.locator('.workspace-label').textContent(), path);
                     expectedHeader ??= actualHeader;
                     assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);
