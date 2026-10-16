@@ -26,6 +26,7 @@ class ApplicationTest {
         assertEquals("ru", page.selectFirst("html")!!.attr("lang"))
         assertEquals("dark", page.selectFirst("#portfolio")!!.attr("data-theme"))
         assertEquals("Дмитрий Дворянников", page.selectFirst("h1")!!.text())
+        assertFalse(page.text().contains("ШМР"))
         assertEquals(listOf("/projects", "/about", "https://t.me/ItzEphir"), page.select(".shortcut").map { it.attr("href") })
         assertTrue(page.select("canvas").isEmpty())
         assertEquals(listOf("https://webring.otomir23.me/itzephir/prev", "https://webring.otomir23.me/", "https://webring.otomir23.me/itzephir/next"), page.select(".webring a").map { it.attr("href") })
@@ -44,7 +45,8 @@ class ApplicationTest {
         assertEquals("https://itzephir.com/projects", projectPage.selectFirst("link[rel=canonical]")!!.attr("href"))
         val profile = Jsoup.parse(client.get("/about").bodyAsText())
         assertEquals("Обо мне", profile.selectFirst("h1")!!.text())
-        assertTrue(profile.text().contains("одной лекцией"))
+        assertTrue(profile.text().contains("Лектор ШМР Яндекса · 2026"))
+        assertTrue(profile.text().contains("инфраструктура и собственные проекты"))
         assertFalse(profile.text().contains("преподаю"))
     }
 
@@ -63,7 +65,7 @@ class ApplicationTest {
         assertFalse(cookie.contains("Max-Age", ignoreCase = true))
         val profile = Jsoup.parse(client.get("/about") { header(HttpHeaders.Cookie, "workspace_tabs=welcome.projects") }.bodyAsText())
         assertEquals(listOf("welcome", "projects", "profile"), profile.select(".editor-tab").map { it.attr("data-tab") })
-        assertEquals("profile.kt", profile.selectFirst(".editor-tab-link[aria-current=page]")!!.text())
+        assertEquals("about.md", profile.selectFirst(".editor-tab-link[aria-current=page]")!!.text())
         profile.select(".tab-close-form").forEach {
             assertEquals("post", it.attr("method")); assertEquals("/tabs/close", it.attr("action"))
             assertEquals("profile", it.selectFirst("input[name=current]")!!.attr("value"))
