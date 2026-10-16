@@ -32,6 +32,8 @@ The implementation uses fluid widths and a 720 px breakpoint. The mobile header
 contains the webring only; routes are reached through content links and Back.
 Within each breakpoint, header dimensions, alignment and control sizes are shared
 by all routes and both themes; page-specific header geometry is not allowed.
+Only the path beside the wordmark changes: `/`, `/projects` or `/about`, in a
+fixed-width slot.
 Desktop tabs represent visited pages, preserve their opening order in the
 session, and provide separate close controls. See `README.md` for tab behavior.
 The profile route adapts the existing biography to the same style because the

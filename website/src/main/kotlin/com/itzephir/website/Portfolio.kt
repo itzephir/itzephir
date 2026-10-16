@@ -92,7 +92,7 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
         a("/", classes = "brand") {
             attributes["aria-label"] = "itzephir — главная"
             span("logo") { img(src = asset("design/${theme.value}/wordmark.svg"), alt = "", classes = "logo-artwork") }
-            span("mono muted workspace-label") { +"/ workspace" }
+            span("mono muted workspace-label") { +page.path }
         }
         div("header-actions") {
             nav("webring mono") {

@@ -65,6 +65,8 @@ The header uses the same dimensions and control sizes on every route and in
 both themes. A stable scrollbar gutter prevents horizontal jumps between short
 and long pages. Opening or closing editor tabs only changes the tab strip and
 page content, not the header layout.
+The fixed-width path beside the wordmark shows `/`, `/projects` or `/about`
+for the current page.
 
 `Webring.kt` refreshes neighbor names from the ring's public `/itzephir/data`
 endpoint in the background, at most every five minutes. HTML always receives
