@@ -9,11 +9,20 @@ Source: [01 · Baseline in Figma](https://www.figma.com/design/zHX90tHJtN7q1Pqav
 | Welcome mobile | `14:3029` | `14:3254` |
 | Projects mobile | `14:3123` | `14:3346` |
 
-The approved brand is option 06: Full connection with uniform 2 px corners on
-the 64 px master. Source variants are `22:4601` (light ink, dark surfaces) and
-`22:4602` (dark ink, light surfaces). Exported SVGs remain unchanged; the header
-scales the 64 px artwork into a 28 px slot. Favicon PNGs are native exports from
-the 16/32 px instances (`22:5040`, `22:5050`, `22:5058`, `22:5068`).
+The approved full logo is the connected `itz` monogram followed by `ephir` in
+Quicksand Bold, with optical letter spacing fixed in Figma. Source components
+are `22:4698` (light ink, dark surfaces) and `22:4699` (dark ink, light surfaces),
+in `Brand / Wordmark`. The [brand sheet](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=22-4701)
+records the approved composition. Use the complete `wordmark.svg` exports;
+the letters are outlines, so no Quicksand font download is needed at runtime.
+The 223.3946 × 80 px component is exported on a 224 × 80 px SVG canvas and
+scaled by 0.4 into an 89.36 × 32 px desktop slot, matching Figma.
+
+The short connected `itz` mark retains uniform 2 px corners on the 64 px master.
+Source variants `22:4601` and `22:4602` remain the SVG favicon sources. Native
+16/32 px favicon PNG exports (`22:5040`, `22:5050`, `22:5058`, `22:5068`) are
+unchanged. Use the short mark for icons, and the whole-name wordmark in desktop
+headers.
 
 Colors and spacing are defined in `styles.css`. Icons and portrait are local
 exports from the same Figma screens. IBM Plex Sans/Mono include Cyrillic and are

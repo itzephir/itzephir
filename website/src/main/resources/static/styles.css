@@ -76,9 +76,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 .skip-link:focus { top: 12px; }
 .app-header { display: flex; height: 60px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; }
 .brand { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
-.brand-name { font-weight: 500; }
-.logo { position: relative; width: 28px; height: 28px; flex: 0 0 28px; }
-.logo-artwork { position: absolute; top: 0; left: 0; transform: scale(.4375); transform-origin: top left; }
+.logo { position: relative; width: 89.36px; height: 32px; flex: 0 0 89.36px; }
+.logo-artwork { position: absolute; top: 0; left: 0; transform: scale(.4); transform-origin: top left; }
 .header-actions { display: flex; align-items: center; gap: 16px; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 8px; }
 .page-welcome .header-actions > .icon-button { width: 18px; height: 36px; }

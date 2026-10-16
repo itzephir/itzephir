@@ -71,8 +71,15 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                         assert.equal(portrait.width, mobile ? 48 : 56);
                         assert.equal(portrait.height, mobile ? 48 : 56);
                     } else if (mobile) assert.ok(await page.locator('.back-link').isVisible());
-                    const logos = mobile ? null : await page.locator('.logo-artwork').boundingBox();
-                    if (logos) { assert.equal(logos.width, 28); assert.equal(logos.height, 28); }
+                    if (!mobile) {
+                        const slot = await page.locator('.logo').boundingBox();
+                        const artwork = await page.locator('.logo-artwork').boundingBox();
+                        assert.ok(Math.abs(slot.width - 89.36) < 0.02);
+                        assert.equal(slot.height, 32);
+                        assert.ok(Math.abs(artwork.width - 89.6) < 0.02);
+                        assert.equal(artwork.height, 32);
+                        assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
+                    }
                     if ([1440, 390, 320].includes(width)) await page.screenshot({
                         path: resolve(screenshots, `${theme}-${path === '/' ? 'welcome' : 'projects'}-${width}.png`), fullPage: true,
                     });
