@@ -5,7 +5,7 @@ html { scrollbar-gutter: stable; }
 .skip-link:focus { top: 12px; }
 .app-header { display: flex; height: 60px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; }
 .brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; white-space: nowrap; }
-.workspace-label { width: 11ch; flex-shrink: 0; }
+.workspace-label { width: 11ch; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; }
 .logo { position: relative; width: 89.36px; height: 32px; flex: 0 0 89.36px; }
 .logo-artwork { position: absolute; top: 0; left: 0; transform: scale(.4); transform-origin: top left; }
 .header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 16px; }
@@ -15,7 +15,7 @@ html { scrollbar-gutter: stable; }
 .ring-neighbor span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ring-index { flex: 0 0 88px; color: var(--muted); }
 .webring a:hover { color: var(--accent); background: var(--raised); border-radius: 8px; }
-.editor-tabs { display: flex; align-items: center; min-height: 45px; padding: 0 32px; background: var(--side); border-bottom: 1px solid var(--line); }
+.editor-tabs { display: flex; align-items: center; min-height: 45px; padding: 0 32px; background: var(--side); border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
 .editor-tab { display: flex; align-items: center; height: 44px; color: var(--muted); white-space: nowrap; }
 .editor-tab-link { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 20px; }
 .editor-tab:has(.tab-close-form) .editor-tab-link { padding-right: 4px; }

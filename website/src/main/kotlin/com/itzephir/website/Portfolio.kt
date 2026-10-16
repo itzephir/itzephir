@@ -10,22 +10,37 @@ enum class Theme(val value: String) {
     companion object { fun from(value: String?): Theme? = entries.find { it.value == value } }
 }
 
-enum class PortfolioPage(val path: String, val title: String) {
-    Welcome("/", "Дмитрий Дворянников — Kotlin Developer"),
-    Projects("/projects", "Мои проекты — itzephir"),
-    Profile("/about", "Обо мне — itzephir");
-    val tabKey: String get() = name.lowercase()
-    val tabLabel: String get() = when (this) {
-        Welcome -> "welcome.md"
-        Projects -> "projects"
-        Profile -> "about.md"
+/** Registered documents accepted by the shell and the visited-tab cookie. */
+@ConsistentCopyVisibility
+data class PortfolioPage private constructor(
+    val path: String,
+    val title: String,
+    val tabKey: String,
+    val tabLabel: String,
+    val tabIcon: String,
+) {
+    val isDevelopment: Boolean get() = path.startsWith("/dev")
+    companion object {
+        val Welcome = PortfolioPage("/", "Дмитрий Дворянников — Kotlin Developer", "welcome", "welcome.md", "file")
+        val Projects = PortfolioPage("/projects", "Мои проекты — itzephir", "projects", "projects", "folder")
+        val Profile = PortfolioPage("/about", "Обо мне — itzephir", "profile", "about.md", "profile")
+        val Development = PortfolioPage("/dev", "Проекты в разработке — itzephir", "dev", "dev/", "dev")
+        val Panel = PortfolioPage("/dev/panel", "Панель проектов — itzephir", "panel", "panel", "folder")
+        val Users = PortfolioPage("/dev/panel/users", "Пользователи — itzephir", "users", "users", "profile")
+        val Account = PortfolioPage("/dev/panel/account", "Аккаунт — itzephir", "account", "account", "profile")
+        val NewProject = PortfolioPage("/dev/panel/new", "Новый проект — itzephir", "new-project", "new project", "file")
+        val entries = listOf(Welcome, Projects, Profile)
+        val developmentPages = listOf(Development, Panel, Users, Account, NewProject)
+        fun editProject(id: java.util.UUID) = PortfolioPage("/dev/panel/$id/edit", "Настройки проекта — itzephir", "edit-$id", "project", "file")
+        fun fromTabKey(value: String): PortfolioPage? = (entries + developmentPages).find { it.tabKey == value }
+            ?: value.takeIf { it.startsWith("edit-") }?.removePrefix("edit-")?.let {
+                runCatching { java.util.UUID.fromString(it) }.getOrNull()?.takeIf { id -> id.toString() == it }?.let(::editProject)
+            }
+        fun fromDevelopmentPath(path: String): PortfolioPage = developmentPages.find { it.path == path }
+            ?: Regex("/dev/panel/([0-9a-f-]{36})/edit").matchEntire(path)?.groupValues?.get(1)?.let {
+                runCatching { java.util.UUID.fromString(it) }.getOrNull()?.let(::editProject)
+            } ?: if (path.startsWith("/dev/panel")) Panel else Development
     }
-    val tabIcon: String get() = when (this) {
-        Welcome -> "file"
-        Projects -> "folder"
-        Profile -> "profile"
-    }
-    companion object { fun fromTabKey(value: String): PortfolioPage? = entries.find { it.tabKey == value } }
 }
 
 private const val telegram = "https://t.me/ItzEphir"
@@ -46,19 +61,20 @@ internal fun asset(name: String): String = assets.computeIfAbsent(name) {
     "/assets/$name?v=$hash"
 }
 
-fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
+fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page), bodyContent: (MAIN.() -> Unit)? = null, documentTitle: String = page.title) {
     lang = "ru"
     head {
         meta { charset = "utf-8" }
         meta { name = "viewport"; content = "width=device-width, initial-scale=1" }
-        title { +page.title }
+        title { +documentTitle }
+        if (page.path.startsWith("/dev/panel")) meta { name = "robots"; content = "noindex, nofollow" }
         meta { name = "description"; content = "Дмитрий Дворянников — Kotlin-разработчик из Москвы. Инфраструктура и собственные проекты." }
         meta { attributes["property"] = "og:type"; content = "website" }
         meta { attributes["property"] = "og:url"; content = "https://itzephir.com${page.path}" }
-        meta { attributes["property"] = "og:title"; content = page.title }
+        meta { attributes["property"] = "og:title"; content = documentTitle }
         meta { attributes["property"] = "og:description"; content = "Инфраструктура, сервисы и собственные проекты на Kotlin." }
         meta { attributes["property"] = "og:image"; content = "https://itzephir.com${asset("avatar.jpg")}" }
-        meta { name = "htmx-config"; content = "{\"allowEval\":false,\"allowScriptTags\":false,\"selfRequestsOnly\":true}" }
+        meta { name = "htmx-config"; content = "{\"includeIndicatorStyles\":false,\"allowEval\":false,\"allowScriptTags\":false,\"selfRequestsOnly\":true}" }
         link { rel = "canonical"; href = "https://itzephir.com${page.path}" }
         // Favicon contrast follows browser chrome, independently of the site's saved theme.
         Theme.entries.forEach { chromeTheme ->
@@ -73,24 +89,26 @@ fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, nei
         }
         link { rel = "stylesheet"; href = asset("styles.css") }
         link { rel = "stylesheet"; href = asset("site-shell.css") }
+        link { rel = "stylesheet"; href = asset("dev.css") }
         link { rel = "preload"; href = asset("fonts/ibm-plex-sans.ttf"); attributes["as"] = "font"; type = "font/ttf"; attributes["crossorigin"] = "anonymous" }
         script { src = asset("htmx-2.0.11.min.js"); defer = true }
     }
-    body { portfolio(theme, page, neighbors, tabs) }
+    body { portfolio(theme, page, neighbors, tabs, bodyContent) }
 }
 
-fun FlowContent.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
-    div("portfolio") { portfolioContent(theme, page, neighbors, tabs) }
+fun FlowContent.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page), content: (MAIN.() -> Unit)? = null) {
+    div("portfolio") { portfolioContent(theme, page, neighbors, tabs, content) }
 }
-fun TagConsumer<*>.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
-    div("portfolio") { portfolioContent(theme, page, neighbors, tabs) }
+fun TagConsumer<*>.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page), content: (MAIN.() -> Unit)? = null) {
+    div("portfolio") { portfolioContent(theme, page, neighbors, tabs, content) }
 }
-private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: WebringNeighbors, tabs: WorkspaceTabs) {
+private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: WebringNeighbors, tabs: WorkspaceTabs, content: (MAIN.() -> Unit)? = null) {
     siteShell(theme, page, neighbors, tabs) {
-        when (page) {
+        if (content != null) content(this) else when (page) {
             PortfolioPage.Welcome -> welcome(theme, page)
             PortfolioPage.Projects -> projectList(theme, page)
             PortfolioPage.Profile -> profile(theme, page)
+            else -> error("Development content must be supplied by the locator")
         }
     }
 }
@@ -126,6 +144,10 @@ private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
         icon(theme, "pin", 18, "pin-mobile")
         div("pinned-copy") { p("pinned-title") { +"itzcast" }; p("muted pinned-description") { +"Быстрый launcher для macOS. Kotlin Multiplatform + Compose." } }
         span("mono pinned-action") { +"Открыть проект" }; icon(theme, "arrow", 16)
+    }
+    a("/dev", classes = "dev-portal content-width") {
+        div { p { +"Открытая мастерская" }; p("muted") { +"Актуальные проекты в разработке" } }
+        span("mono") { +"Открыть витрину" }
     }
     siteFooter(true)
 }
