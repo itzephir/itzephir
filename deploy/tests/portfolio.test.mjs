@@ -1,16 +1,59 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
 
+async function headerGeometry(page) {
+    await page.evaluate(() => document.fonts.ready);
+    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .header-language, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
+        elements.filter(element => element.getClientRects().length).map(element => {
+            const { x, y, width, height } = element.getBoundingClientRect();
+            return { element: element.classList[0], box: [x, y, width, height].map(value => Math.round(value * 100) / 100) };
+        }));
+}
+
+async function assertShellDimensions(page, width) {
+    const mobile = width < 720;
+    const box = selector => page.locator(selector).boundingBox();
+    const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 0.03, `${label}: expected ${expected}, got ${actual}`);
+    const header = await box('.app-header');
+    near(header.x, 0, 'Header left'); near(header.y, 0, 'Header top');
+    near(header.height, mobile ? 69 : 60, 'Header height');
+    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '1');
+    assert.equal(await page.locator('.brand').isVisible(), !mobile);
+    assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
+    assert.equal(await page.locator('.workspace-label').isVisible(), width >= 1000);
+    assert.equal(await page.locator('.header-language').isVisible(), width >= 1000);
+    for (const selector of ['.desktop-theme', '.header-github']) {
+        assert.equal(await page.locator(selector).isVisible(), !mobile);
+        if (!mobile) { const control = await box(selector); near(control.width, 44, `${selector} width`); near(control.height, 44, `${selector} height`); }
+    }
+    const ring = await box('.webring');
+    near(ring.y, 12, 'Webring top');
+    near(ring.height, mobile ? 44 : 36, 'Webring height');
+    near(ring.width, mobile ? header.width - 48 : 344, 'Webring width');
+    if (mobile) near(ring.x, 24, 'Mobile webring left');
+    else {
+        const brand = await box('.brand'), tabs = await box('.editor-tabs');
+        near(brand.x, width < 1000 ? 24 : 32, 'Brand left');
+        near(brand.height, 32, 'Brand height');
+        near(tabs.y, 60, 'Tabs top'); near(tabs.height, 45, 'Tabs height');
+    }
+}
+
 test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
     const root = fileURLToPath(new URL('../..', import.meta.url));
+    // Exercise the same typed page registry as Ktor, including newly registered pages.
+    const source = await readFile(resolve(root, 'website/src/main/kotlin/com/itzephir/website/Portfolio.kt'), 'utf8');
+    const registry = source.slice(source.indexOf('enum class PortfolioPage'), source.indexOf('private const val telegram'));
+    const routes = [...registry.matchAll(/^\s+\w+\("([^"]+)",/gm)].map(match => match[1]);
+    assert.ok(routes.length >= 3 && routes.includes('/'), 'Portfolio page registry must be discoverable');
     const distribution = resolve(process.env.WEBSITE_DIST ?? resolve(root, 'website/build/install/website'));
     const screenshots = resolve(process.env.BROWSER_OUTPUT ?? resolve(root, 'website/build/browser-check'));
     await mkdir(screenshots, { recursive: true });
@@ -38,6 +81,23 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         page.on('pageerror', error => errors.push(error.message));
         page.on('response', response => { if (response.status() >= 400) failedResponses.push(response.url()); });
         page.on('request', request => requests.push(request.url()));
+        // The shared shell must not move when the page, theme or scrollbar changes.
+        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 320]) {
+            await page.setViewportSize({ width, height: 1000 });
+            let expectedHeader;
+            for (const theme of ['dark', 'light']) {
+                for (const path of routes) {
+                    await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
+                    const actualHeader = await headerGeometry(page);
+                    await assertShellDimensions(page, width);
+                    assert.equal(await page.locator('.workspace-label').textContent(), path);
+                    assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
+                    expectedHeader ??= actualHeader;
+                    assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
+                    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);
+                }
+            }
+        }
         for (const theme of ['dark', 'light']) {
             await page.emulateMedia({ colorScheme: theme });
             for (const width of [1440, 768, 720, 719, 390, 320]) {
@@ -71,8 +131,15 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                         assert.equal(portrait.width, mobile ? 48 : 56);
                         assert.equal(portrait.height, mobile ? 48 : 56);
                     } else if (mobile) assert.ok(await page.locator('.back-link').isVisible());
-                    const logos = mobile ? null : await page.locator('.logo-artwork').boundingBox();
-                    if (logos) { assert.equal(logos.width, 28); assert.equal(logos.height, 28); }
+                    if (!mobile) {
+                        const slot = await page.locator('.logo').boundingBox();
+                        const artwork = await page.locator('.logo-artwork').boundingBox();
+                        assert.ok(Math.abs(slot.width - 89.36) < 0.02);
+                        assert.equal(slot.height, 32);
+                        assert.ok(Math.abs(artwork.width - 89.6) < 0.02);
+                        assert.equal(artwork.height, 32);
+                        assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
+                    }
                     if ([1440, 390, 320].includes(width)) await page.screenshot({
                         path: resolve(screenshots, `${theme}-${path === '/' ? 'welcome' : 'projects'}-${width}.png`), fullPage: true,
                     });
@@ -119,14 +186,17 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         const tabKeys = () => workspace.locator('.editor-tab').evaluateAll(tabs => tabs.map(tab => tab.dataset.tab));
         const activeTab = () => workspace.locator('.editor-tab-link[aria-current="page"]').textContent();
         await workspace.goto(base, { waitUntil: 'networkidle' });
+        const workspaceHeader = await headerGeometry(workspace);
         assert.deepEqual(await tabKeys(), ['welcome']);
         assert.equal(await workspace.locator('.tab-close').count(), 0);
         await workspace.locator('.shortcut[href="/projects"]').click();
         await workspace.waitForURL(`${base}/projects`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects']);
         await workspace.locator('.editor-tab-link[href="/"]').click();
         await workspace.locator('.shortcut[href="/about"]').click();
         await workspace.waitForURL(`${base}/about`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         assert.equal((await activeTab()).trim(), 'about.md');
         await workspace.evaluate(() => document.fonts.ready);
@@ -135,6 +205,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         await workspace.locator('.theme-toggle:visible').click();
         await workspace.waitForSelector('#portfolio[data-theme="light"]');
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         await workspace.reload({ waitUntil: 'networkidle' });
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
@@ -147,6 +218,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.equal((await activeTab()).trim(), 'projects');
         await workspace.getByRole('button', { name: 'Закрыть projects', exact: true }).click();
         await workspace.waitForURL(`${base}/`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome']);
         assert.equal(await workspace.locator('#portfolio').getAttribute('data-theme'), 'light');
         await workspace.reload({ waitUntil: 'networkidle' });

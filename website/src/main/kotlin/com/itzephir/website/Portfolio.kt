@@ -29,9 +29,8 @@ enum class PortfolioPage(val path: String, val title: String) {
 }
 
 private const val telegram = "https://t.me/ItzEphir"
-private const val github = "https://github.com/itzephir"
+internal const val github = "https://github.com/itzephir"
 private const val email = "mailto:d.y.dvoryannikov@mail.ru"
-private const val ring = "https://webring.otomir23.me/"
 private data class Project(val name: String, val description: String, val stack: String, val url: String)
 private val projects = listOf(
     Project("Photorus", "Микросервисы для Telegram WebApp: OCR, AI-разбор правил, SSE и MongoDB.", "Kotlin · Ktor · Docker", "$github/photorus-tgapp-backend"),
@@ -73,6 +72,7 @@ fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, nei
             link { rel = "icon"; type = "image/svg+xml"; media = query; href = asset("design/${chromeTheme.value}/logo.svg") }
         }
         link { rel = "stylesheet"; href = asset("styles.css") }
+        link { rel = "stylesheet"; href = asset("site-shell.css") }
         link { rel = "preload"; href = asset("fonts/ibm-plex-sans.ttf"); attributes["as"] = "font"; type = "font/ttf"; attributes["crossorigin"] = "anonymous" }
         script { src = asset("htmx-2.0.11.min.js"); defer = true }
     }
@@ -80,81 +80,18 @@ fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, nei
 }
 
 fun FlowContent.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
-    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors, tabs) }
+    div("portfolio") { portfolioContent(theme, page, neighbors, tabs) }
 }
 fun TagConsumer<*>.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
-    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors, tabs) }
+    div("portfolio") { portfolioContent(theme, page, neighbors, tabs) }
 }
 private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: WebringNeighbors, tabs: WorkspaceTabs) {
-    id = "portfolio"; attributes["data-theme"] = theme.value
-    a("#content", classes = "skip-link") { +"Перейти к содержимому" }
-    header("app-header") {
-        a("/", classes = "brand") {
-            attributes["aria-label"] = "itzephir — главная"
-            span("logo") { img(src = asset("design/${theme.value}/logo.svg"), alt = "", classes = "logo-artwork") { width = "64"; height = "64" } }
-            span("brand-name") { +"itzephir" }
-            span("mono muted workspace-label") { +"/ workspace" }
-        }
-        div("header-actions") {
-            nav("webring mono") {
-                attributes["aria-label"] = "Webring"
-                a("${ring}itzephir/prev", classes = "ring-neighbor ring-previous") {
-                    rel = "prev"; title = neighbors.previous; attributes["aria-label"] = "Предыдущий сайт: ${neighbors.previous}"
-                    icon(theme, "chevron-left", 16, "webring-left-mobile"); span { +neighbors.previous }
-                }
-                a(ring, classes = "ring-index") { attributes["aria-label"] = "Все участники webring"; +"webring" }
-                a("${ring}itzephir/next", classes = "ring-neighbor ring-next") {
-                    rel = "next"; title = neighbors.next; attributes["aria-label"] = "Следующий сайт: ${neighbors.next}"
-                    span { +neighbors.next }; icon(theme, "chevron-right", 16, "webring-right-mobile")
-                }
-            }
-            span("mono muted header-language") { +"RU" }
-            themeToggle(theme, page, false)
-            externalLink(github, "icon-button header-github") { attributes["aria-label"] = "GitHub itzephir"; icon(theme, "github", 18) }
-        }
-    }
-    nav("editor-tabs mono") {
-        attributes["aria-label"] = "Открытые страницы"
-        tabs.pages.forEach { opened -> editorTab(theme, opened, page, tabs.canClose(opened)) }
-    }
-    main(if (page == PortfolioPage.Welcome) "welcome-canvas" else "page-canvas") {
-        id = "content"
+    siteShell(theme, page, neighbors, tabs) {
         when (page) {
             PortfolioPage.Welcome -> welcome(theme, page)
             PortfolioPage.Projects -> projectList(theme, page)
             PortfolioPage.Profile -> profile(theme, page)
         }
-    }
-}
-private fun FlowContent.editorTab(theme: Theme, opened: PortfolioPage, current: PortfolioPage, canClose: Boolean) {
-    val active = opened == current
-    div("editor-tab${if (active) " active" else ""}") {
-        attributes["data-tab"] = opened.tabKey
-        a(opened.path, classes = "editor-tab-link") {
-            if (active) attributes["aria-current"] = "page"
-            val image = opened.tabIcon
-            icon(theme, if (active && image in listOf("file", "folder")) "$image-active" else image, 15)
-            +opened.tabLabel
-        }
-        if (canClose) form(action = "/tabs/close", method = FormMethod.post, classes = "tab-close-form") {
-            input(type = InputType.hidden, name = "tab") { value = opened.tabKey }
-            input(type = InputType.hidden, name = "current") { value = current.tabKey }
-            button(type = ButtonType.submit, classes = "tab-close") {
-                attributes["aria-label"] = "Закрыть ${opened.tabLabel}"
-                title = "Закрыть ${opened.tabLabel}"
-                icon(theme, "close", 12)
-            }
-        }
-    }
-}
-private fun FlowContent.themeToggle(theme: Theme, page: PortfolioPage, mobile: Boolean) {
-    a("${page.path}?theme=${theme.opposite.value}", classes = "theme-toggle icon-button ${if (mobile) "mobile-theme" else "desktop-theme"}") {
-        id = if (mobile) "theme-toggle-mobile" else "theme-toggle"
-        attributes["aria-label"] = if (theme == Theme.Dark) "Включить светлую тему" else "Включить тёмную тему"
-        title = if (theme == Theme.Dark) "Светлая тема" else "Тёмная тема"
-        attributes["hx-get"] = href; attributes["hx-target"] = "#portfolio"
-        attributes["hx-swap"] = "outerHTML show:none"; attributes["hx-sync"] = "#portfolio:drop"
-        icon(theme, "theme", 18)
     }
 }
 private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
@@ -297,7 +234,7 @@ private fun FlowContent.siteFooter(home: Boolean) {
         if (!home) p("footer-name muted") { +"Дмитрий Дворянников" }
     }
 }
-private fun FlowContent.icon(theme: Theme, name: String, size: Int, mobileName: String? = null) {
+internal fun FlowContent.icon(theme: Theme, name: String, size: Int, mobileName: String? = null) {
     span("icon icon-$size${if (mobileName != null) " responsive-icon" else ""}") {
         attributes["aria-hidden"] = "true"
         picture {
@@ -306,6 +243,6 @@ private fun FlowContent.icon(theme: Theme, name: String, size: Int, mobileName: 
         }
     }
 }
-private fun FlowContent.externalLink(url: String, classes: String, block: A.() -> Unit) {
+internal fun FlowContent.externalLink(url: String, classes: String, block: A.() -> Unit) {
     a(url, classes = classes) { target = "_blank"; rel = "noopener noreferrer"; block() }
 }

@@ -29,10 +29,12 @@ Plex Sans/Mono fonts, and HTMX live in
 caches after updates; assets are cached for an hour.
 
 The implementation follows the approved [Figma baseline](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=14-3481):
-dark/light colors, desktop editor tabs, mobile content navigation, and logo 06
-(Full connection, Soft corners). The desktop mark renders at 28 px; the original
-64 px SVGs and transparent 16/32 px favicons are exported from Figma. Favicon
-variants follow browser color scheme so they stay visible in light/dark tabs.
+dark/light colors, desktop editor tabs, mobile content navigation, and the
+whole-name logo: connected `itz` + `ephir` in Quicksand Bold. The complete SVG
+exports retain the outlined letters and optical spacing, and render in a
+32 px-high desktop slot. The short `itz` SVG and transparent 16/32 px favicon
+exports remain unchanged. Favicon variants follow browser color scheme so they
+stay visible in light/dark tabs.
 
 The theme link requests the current path with `?theme=light` or `?theme=dark`. A normal request gets a
 complete HTML document. An `HX-Request: true` request gets just `#portfolio`, which
@@ -59,11 +61,25 @@ They are visible in the first viewport without JavaScript, including at 320 px.
 On mobile the three links have 44 px touch targets; the header has no brand or
 page tabs. Theme switching sits beside the greeting or Back link.
 
+The header uses the same dimensions and control sizes on every route and in
+both themes. A stable scrollbar gutter prevents horizontal jumps between short
+and long pages. Opening or closing editor tabs only changes the tab strip and
+page content, not the header layout.
+The fixed-width path beside the wordmark shows `/`, `/projects` or `/about`
+for the current page.
+
+The [accepted shell contract](architecture/site-shell.md) defines this as an
+architectural boundary. `SiteShell.kt` and `site-shell.css` own the shared shell;
+pages provide main content. CI checks its approved HTML structure, ownership,
+responsive geometry and navigation behavior before allowing deployment.
+
 `Webring.kt` refreshes neighbor names from the ring's public `/itzephir/data`
 endpoint in the background, at most every five minutes. HTML always receives
 the last known names immediately. Failures retain the cached names and retry
 after one minute; the upstream request has a three-second timeout. Outgoing
 prev/next URLs never depend on neighbor names or URLs from that response.
+Member names are never hardcoded. Before the first successful API response,
+generic direction labels keep the links usable.
 
 ## Build and verify
 
