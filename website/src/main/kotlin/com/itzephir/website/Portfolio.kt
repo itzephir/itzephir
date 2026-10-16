@@ -275,7 +275,7 @@ private fun FlowContent.profile(theme: Theme, page: PortfolioPage) {
         section("profile-panel") {
             h2 { +"Дмитрий Дворянников" }
             p { +"Я Kotlin-разработчик из Москвы, работаю в Яндексе." }
-            p { +"Сейчас мой фокус — инфраструктура и собственные проекты: от разработки до деплоя и поддержки." }
+            p { +"Занимаюсь инфраструктурой и разрабатываю собственные проекты." }
             p { +"Лектор ШМР Яндекса · 2026" }
             ul("stack-list mono") { listOf("Kotlin", "Ktor", "Docker", "Linux", "CI/CD").forEach { li { +it } } }
             a("/projects", classes = "text-link") { +"Мои проекты" }
