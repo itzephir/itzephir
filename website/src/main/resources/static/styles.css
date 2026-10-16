@@ -21,7 +21,6 @@
 }
 
 * { box-sizing: border-box; }
-html { scrollbar-gutter: stable; }
 body { margin: 0; background: #1b1d20; }
 html:has([data-theme="light"]) { background: #fafbfc; color-scheme: light; }
 html:has([data-theme="dark"]) { color-scheme: dark; }
@@ -73,31 +72,8 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 .icon-20 { --icon-size: 20px; }
 .icon picture { display: contents; }
 .icon img { display: block; flex: none; }
-.skip-link { position: absolute; top: -100px; left: 24px; padding: 12px 20px; border-radius: 8px; background: var(--text); color: var(--bg); z-index: 2; }
-.skip-link:focus { top: 12px; }
-.app-header { display: flex; height: 60px; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 24px; padding: 0 32px; }
-.brand { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; white-space: nowrap; }
-.workspace-label { width: 11ch; flex-shrink: 0; }
-.logo { position: relative; width: 89.36px; height: 32px; flex: 0 0 89.36px; }
-.logo-artwork { position: absolute; top: 0; left: 0; transform: scale(.4); transform-origin: top left; }
-.header-actions { display: flex; flex: 0 0 auto; align-items: center; gap: 16px; }
 .icon-button { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; flex: 0 0 auto; border-radius: 8px; }
 .icon-button:hover { background: var(--raised); }
-.webring { display: flex; flex-shrink: 0; align-items: center; width: 344px; height: 36px; background: var(--side); box-shadow: inset 0 0 0 1px var(--line); border-radius: 8px; }
-.webring a { display: flex; align-items: center; justify-content: center; height: 100%; }
-.ring-neighbor { flex: 1; min-width: 0; padding: 0 12px; gap: 6px; }
-.ring-neighbor span:not(.icon) { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ring-index { flex: 0 0 88px; color: var(--muted); }
-.webring a:hover { color: var(--accent); background: var(--raised); border-radius: 8px; }
-.editor-tabs { display: flex; align-items: center; min-height: 45px; padding: 0 32px; background: var(--side); border-bottom: 1px solid var(--line); }
-.editor-tab { display: flex; align-items: center; height: 44px; color: var(--muted); white-space: nowrap; }
-.editor-tab-link { display: flex; align-items: center; gap: 8px; height: 100%; padding: 0 20px; }
-.editor-tab:has(.tab-close-form) .editor-tab-link { padding-right: 4px; }
-.editor-tab.active { background: var(--bg); color: var(--text); }
-.editor-tab:hover { color: var(--text); }
-.tab-close-form { display: flex; margin: 0 12px 0 0; }
-.tab-close { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
-.tab-close:hover { background: var(--raised); }
 .welcome-canvas { display: flex; flex: 1; flex-direction: column; align-items: center; gap: 32px; padding: 80px 24px 48px; }
 .welcome-identity { display: flex; flex-direction: column; align-items: center; gap: 20px; }
 .identity-and-theme { display: flex; align-items: center; justify-content: center; }
@@ -168,9 +144,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 .text-link { color: var(--accent); }
 
 @media (min-width: 720px) and (max-width: 999px) {
-    .app-header, .editor-tabs { padding-left: 24px; padding-right: 24px; }
-    .workspace-label, .header-language { display: none; }
-    .header-actions { gap: 12px; }
     .hero-name { font-size: 56px; line-height: 62px; }
     .shortcut-grid { gap: 16px; }
     .shortcut { padding: 20px; }
@@ -184,15 +157,6 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
     .desktop-only { display: none; }
     .mobile-only { display: inline; }
     .theme-toggle.mobile-theme { display: inline-flex; }
-    .brand, .header-language, .header-github, .desktop-theme, .editor-tabs { display: none; }
-    .app-header { height: 69px; padding: 12px 24px; border-bottom: 1px solid var(--line); }
-    .header-actions { width: 100%; }
-    .webring { width: 100%; height: 44px; }
-    .ring-neighbor { gap: 4px; padding: 0 6px; }
-    .ring-previous { min-width: 94px; }
-    .ring-next { min-width: 102px; }
-    .ring-index { flex-basis: 76px; }
-    .webring .icon { --icon-size: 12px; }
     .welcome-canvas { flex: 1; align-items: stretch; padding: 40px 24px 32px; }
     .welcome-identity { gap: 24px; }
     .identity-and-theme { width: 100%; justify-content: space-between; gap: 12px; }
