@@ -14,3 +14,4 @@ dependencyResolutionManagement {
 rootProject.name = "itzephir"
 
 include(":website")
+include(":project-locator")

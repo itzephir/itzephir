@@ -53,3 +53,46 @@ welcome/projects/about and both themes, loaded assets, logo size, visible named 
 links, 44 px mobile touch targets, theme persistence, and navigation without JS.
 Screenshots are generated under `website/build/browser-check` and uploaded as
 the `portfolio-screenshots` CI artifact.
+
+## Development workspace UI v1
+
+The [implementation frames](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=70-6622)
+on `02 · Dev / Витрина и панель` supersede the exploratory gallery/admin
+directions for implementation. They compose the accepted shell v1 masters,
+keep IBM Plex Sans/Mono and Workspace color variables, and use 24 px card
+padding, 10 px card corners, 44 px form controls and 40/32 px desktop/mobile
+page headings. The desktop management sidebar is 232 px wide; on mobile it
+becomes content navigation below the shared webring. Back and theme controls
+remain in the document, outside the mobile header.
+
+| View | Dark | Light | Mobile |
+| --- | --- | --- | --- |
+| Public `/dev` | `70:2982` | `70:3158` | `70:3310` |
+| Admin projects | `70:3373` | `70:3555` | `70:3733` |
+| Owner project settings | `70:3820` | `70:3971` | `70:4118` |
+| Creation / owner assignment | `70:4174` | `70:4338` | `70:4498` |
+| Request review | `70:4567` | `70:4720` | `70:4869` |
+| Users | `70:4927` | `70:5085` | `70:5239` |
+| Account | `70:5302` | `70:5448` | `70:5590` |
+| Sign in | `70:5641` | `70:5771` | `70:5897` |
+| One-time service token | `70:5934` | `70:6079` | `70:6212` |
+| Empty / stale data states | `70:6254` | `70:6387` | `70:6516` |
+
+The gallery uses real registry names and slugs. Approved, non-revoked projects
+link to `/dev/project/<slug>/` on the current host. Owner assignment appears
+only for administrators in existing project settings. GitHub login/linking is
+conditional on provider configuration; password login is always the initial
+configured flow. Sample projects, usernames and masked tokens in Figma are
+illustrative; no credentials or actual service tokens are design assets.
+
+The portal from welcome to `/dev` is a content card, not a permanent editor
+tab. Dev documents join the same visited-tab cookie; project settings accept
+only registered UUID paths. The strip scrolls when many documents are open,
+preserving the app bar and 45 px strip height. The approved header HTML fixture
+and app bar geometry are unchanged.
+
+`LocatorPageRenderer` separates locator forms and permission checks from the
+website's document renderer. `Development.kt` supplies its content to
+`SiteShell.kt`; `dev.css` owns only section content, and all global chrome
+continues to be owned by `site-shell.css`. The legacy `/dev/assets/style.css`
+URL serves the same content stylesheet for deployment compatibility.

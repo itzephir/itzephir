@@ -73,6 +73,16 @@ architectural boundary. `SiteShell.kt` and `site-shell.css` own the shared shell
 pages provide main content. CI checks its approved HTML structure, ownership,
 responsive geometry and navigation behavior before allowing deployment.
 
+The `/dev` gallery and `/dev/panel` management UI use the same shell. The public
+gallery shows approved registry projects; owners manage only assigned projects,
+and administrators can create/review projects, assign owners and add users.
+Account settings support password changes and configured GitHub linking. Dev
+documents share visited tabs, themes and no-JavaScript navigation with portfolio
+pages. Their [Figma UI v1 frames](DESIGN.md#development-workspace-ui-v1) cover both
+themes, responsive layouts, forms, errors and one-time service-token output.
+Run the PostgreSQL-backed checks from `project-locator/README.md` as well as the
+ordinary website checks when changing this integration.
+
 `Webring.kt` refreshes neighbor names from the ring's public `/itzephir/data`
 endpoint in the background, at most every five minutes. HTML always receives
 the last known names immediately. Failures retain the cached names and retry

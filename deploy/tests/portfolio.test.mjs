@@ -49,10 +49,10 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
     const root = fileURLToPath(new URL('../..', import.meta.url));
-    // Exercise the same typed page registry as Ktor, including newly registered pages.
+    // Database-backed dev documents exercise the same shell in locator.test.mjs.
     const source = await readFile(resolve(root, 'website/src/main/kotlin/com/itzephir/website/Portfolio.kt'), 'utf8');
-    const registry = source.slice(source.indexOf('enum class PortfolioPage'), source.indexOf('private const val telegram'));
-    const routes = [...registry.matchAll(/^\s+\w+\("([^"]+)",/gm)].map(match => match[1]);
+    const registry = source.slice(source.indexOf('data class PortfolioPage'), source.indexOf('private const val telegram'));
+    const routes = [...registry.matchAll(/^\s+val \w+ = PortfolioPage\("([^"]+)",/gm)].map(match => match[1]).filter(path => !path.startsWith('/dev'));
     assert.ok(routes.length >= 3 && routes.includes('/'), 'Portfolio page registry must be discoverable');
     const distribution = resolve(process.env.WEBSITE_DIST ?? resolve(root, 'website/build/install/website'));
     const screenshots = resolve(process.env.BROWSER_OUTPUT ?? resolve(root, 'website/build/browser-check'));

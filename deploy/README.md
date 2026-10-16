@@ -42,6 +42,45 @@ for automatic rollback during that deployment. On a fresh VM setup uses the
 checked-in Ktor templates. Re-running setup preserves managed configurations.
 `ConditionPathExists` prevents an unmigrated systemd service from starting.
 
+## Project locator and password login
+
+Locator releases require a configured PostgreSQL database and human web login.
+Before the first locator deployment for each environment, run the versioned
+bootstrap from a specific, checked Git commit on the VM as root:
+
+```sh
+python3 deploy/setup-locator.py dev
+# Prepare production before merging the locator PR:
+python3 deploy/setup-locator.py prod
+```
+
+The script installs Ubuntu's PostgreSQL package if absent and creates a dedicated,
+non-superuser database owner and database for the selected environment. PUBLIC
+database access is revoked so stage credentials cannot connect to production.
+Database password, service admin token, JWT secret and the initial web admin
+password are generated on the VM, kept in root-only
+`/etc/itzephir/locator-ENV.env`, and never printed or sent through GitHub.
+Setup preserves credentials/data when repeated and rejects a conflicting database
+owner. An incomplete setup keeps its generated credentials in a root-only pending
+file for a safe retry; the application does not load that file.
+
+Setup installs a required, per-environment systemd drop-in, including on older
+VMs whose base unit predates locator. It reloads systemd definitions without
+restarting the application or changing nginx. The next normal CI deployment
+activates the service and checks `/dev`, `/dev/panel`, and their stylesheet over
+HTTPS. Missing configuration fails before activation; a missing route triggers
+the existing application/nginx rollback. Prepare `prod` before merging the PR.
+
+The initial web admin username is `itzephir`. As the VM owner, retrieve only its
+initial password over your own SSH session, then change it under Account:
+
+```sh
+sudo sed -n 's/^LOCATOR_ADMIN_PASSWORD=//p' /etc/itzephir/locator-dev.env
+```
+
+GitHub OAuth remains optional and requires its own application credentials and
+callback; see [project-locator/README.md](../project-locator/README.md).
+
 ## Versioned nginx configuration
 
 `deploy/nginx/dev.conf` and `prod.conf` are packaged with every release. After
@@ -75,7 +114,7 @@ CI builds `website/build/install/website` with Gradle `installDist`, packages
 its nginx templates and `activate-release.sh`, and uploads to a unique
 `/srv/itzephir/ENV/releases/RELEASE` directory. It atomically replaces `current`,
 restarts only that environment's service, waits for `/healthz`, applies nginx,
-and checks HTTPS through nginx. If any step fails it restores the preceding
+and checks HTTPS through nginx, including required locator pages. If any step fails it restores the preceding
 symlink and service (stopping Ktor for a preceding static release), plus nginx
 when needed. Requests can briefly fail during the restart.
 

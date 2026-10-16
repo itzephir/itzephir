@@ -8,6 +8,16 @@ class WorkspaceTabsTest {
     private val profile = PortfolioPage.Profile
 
     @Test
+    fun `dev documents share visited tabs and accept only registered project settings paths`() {
+        val edit = PortfolioPage.editProject(java.util.UUID.fromString("12345678-1234-1234-1234-123456789abc"))
+        val tabs = WorkspaceTabs().open(welcome).open(PortfolioPage.Development).open(PortfolioPage.Panel).open(edit).open(edit)
+        assertEquals(tabs, WorkspaceTabs.fromCookie(tabs.cookieValue))
+        assertEquals(edit, PortfolioPage.fromDevelopmentPath(edit.path))
+        assertNull(PortfolioPage.fromTabKey("edit-../../evil"))
+        assertEquals(PortfolioPage.Panel, tabs.close(edit, edit).page)
+    }
+
+    @Test
     fun `open preserves arrival order without duplicates or unvisited pages`() {
         assertEquals(emptyList(), WorkspaceTabs.fromCookie(null).pages)
         val tabs = WorkspaceTabs().open(projects).open(welcome).open(profile).open(projects)

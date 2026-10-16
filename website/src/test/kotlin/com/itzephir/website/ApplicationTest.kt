@@ -147,6 +147,7 @@ class ApplicationTest {
         val response = client.get("/") { header(HttpHeaders.Cookie, "theme=invalid") }
         assertEquals("dark", Jsoup.parse(response.bodyAsText()).selectFirst("#portfolio")!!.attr("data-theme"))
         assertEquals(HttpStatusCode.NotFound, client.get("/missing").status)
+        assertEquals(HttpStatusCode.NotFound, client.get("/api/project-locator/v1/identity").status)
         assertEquals("ok", client.get("/healthz").bodyAsText())
     }
 
