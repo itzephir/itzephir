@@ -29,3 +29,4 @@ to Kotlin Multiplatform, Compose, and Ktor.
 This repository also contains [itzephir.com](https://itzephir.com), a server-rendered
 portfolio built with **Ktor, kotlinx.html, and HTMX**. See [website/README.md](website/README.md)
 for local development and [deploy/README.md](deploy/README.md) for CI/CD.
+Figma work uses [figma-cli](website/FIGMA.md) as the primary design tool.
