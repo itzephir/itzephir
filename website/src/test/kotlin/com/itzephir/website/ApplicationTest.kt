@@ -18,7 +18,7 @@ import kotlin.test.*
 class ApplicationTest {
     @Test
     fun `welcome and project routes contain complete accessible server rendered content`() = testApplication {
-        application { module(neighborNames = { WebringNeighbors() }) }
+        application { module(neighborNames = { WebringNeighbors("Previous from API", "Next from API") }) }
         val response = client.get("/")
         assertEquals(HttpStatusCode.OK, response.status)
         assertEquals("no-store", response.headers[HttpHeaders.CacheControl])
@@ -30,7 +30,7 @@ class ApplicationTest {
         assertEquals(listOf("/projects", "/about", "https://t.me/ItzEphir"), page.select(".shortcut").map { it.attr("href") })
         assertTrue(page.select("canvas").isEmpty())
         assertEquals(listOf("https://webring.otomir23.me/itzephir/prev", "https://webring.otomir23.me/", "https://webring.otomir23.me/itzephir/next"), page.select(".webring a").map { it.attr("href") })
-        assertEquals(listOf("CMD/OPT/S", "webring", "badinteger"), page.select(".webring a").map { it.text() })
+        assertEquals(listOf("Previous from API", "webring", "Next from API"), page.select(".webring a").map { it.text() })
         page.select(".webring a").forEach { assertFalse(it.hasAttr("target")) }
         assertEquals("/?theme=light", page.selectFirst("#theme-toggle")!!.attr("href"))
         assertTrue(page.select("script[src]").single().attr("src").startsWith("/assets/htmx-2.0.11.min.js?v="))

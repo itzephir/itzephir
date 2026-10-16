@@ -11,7 +11,8 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicBoolean
 
-data class WebringNeighbors(val previous: String = "CMD/OPT/S", val next: String = "badinteger")
+/** Direction labels are only a cold-start fallback; member names come from the API. */
+data class WebringNeighbors(val previous: String = "Предыдущий", val next: String = "Следующий")
 
 internal fun parseWebringNeighbors(body: String): WebringNeighbors {
     val data = Json.parseToJsonElement(body).jsonObject
