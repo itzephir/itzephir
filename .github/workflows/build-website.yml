@@ -51,7 +51,7 @@ jobs:
       - name: Check nginx publishing and rollback
         run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
 
-      - name: Check deployment and portfolio in Chrome
+      - name: Check shell ownership, navigation and responsive contract in Chrome
         env:
           BROWSER_OUTPUT: ${{ github.workspace }}/screenshots
         run: CHROME_EXECUTABLE="$(command -v google-chrome)" npm test --prefix deploy

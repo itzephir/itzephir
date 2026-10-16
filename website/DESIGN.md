@@ -24,7 +24,8 @@ Source variants `22:4601` and `22:4602` remain the SVG favicon sources. Native
 unchanged. Use the short mark for icons, and the whole-name wordmark in desktop
 headers.
 
-Colors and spacing are defined in `styles.css`. Icons and portrait are local
+Colors and content spacing are defined in `styles.css`; shared shell geometry
+is owned by `site-shell.css`. Icons and portrait are local
 exports from the same Figma screens. IBM Plex Sans/Mono include Cyrillic and are
 self-hosted; font and icon license notices are under `third_party`.
 
@@ -34,6 +35,13 @@ Within each breakpoint, header dimensions, alignment and control sizes are share
 by all routes and both themes; page-specific header geometry is not allowed.
 Only the path beside the wordmark changes: `/`, `/projects` or `/about`, in a
 fixed-width slot.
+The [site shell contract v1](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=59-2692)
+records this architectural boundary with dark/light route examples and mobile
+states. The desktop app bar uses component set `59:1689` (masters `59:1687` /
+`59:1688`), with only Theme and Path as inputs. Mobile uses set `40:7383`
+(masters `40:7381` / `40:7382`). All eight baseline screens use these instances;
+the Dev header family `40:7356` composes the same desktop app bar with tabs.
+See [ADR 001](architecture/site-shell.md) for code ownership and CI enforcement.
 Desktop tabs represent visited pages, preserve their opening order in the
 session, and provide separate close controls. See `README.md` for tab behavior.
 The profile route adapts the existing biography to the same style because the

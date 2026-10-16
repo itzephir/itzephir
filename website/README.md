@@ -68,11 +68,18 @@ page content, not the header layout.
 The fixed-width path beside the wordmark shows `/`, `/projects` or `/about`
 for the current page.
 
+The [accepted shell contract](architecture/site-shell.md) defines this as an
+architectural boundary. `SiteShell.kt` and `site-shell.css` own the shared shell;
+pages provide main content. CI checks its approved HTML structure, ownership,
+responsive geometry and navigation behavior before allowing deployment.
+
 `Webring.kt` refreshes neighbor names from the ring's public `/itzephir/data`
 endpoint in the background, at most every five minutes. HTML always receives
 the last known names immediately. Failures retain the cached names and retry
 after one minute; the upstream request has a three-second timeout. Outgoing
 prev/next URLs never depend on neighbor names or URLs from that response.
+Member names are never hardcoded. Before the first successful API response,
+generic direction labels keep the links usable.
 
 ## Build and verify
 

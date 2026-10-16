@@ -28,10 +28,10 @@ class WebringTest {
 
     @Test
     fun `only the registered member response supplies complete valid names`() {
-        val json = """{"prev":{"name":"CMD/OPT/S"},"curr":{"slug":"itzephir"},"next":{"name":"badinteger"}}"""
-        assertEquals(WebringNeighbors(), parseWebringNeighbors(json))
+        val json = """{"prev":{"name":"API previous"},"curr":{"slug":"itzephir"},"next":{"name":"API next"}}"""
+        assertEquals(WebringNeighbors("API previous", "API next"), parseWebringNeighbors(json))
         assertFails { parseWebringNeighbors(json.replace("itzephir", "another-member")) }
-        assertFails { parseWebringNeighbors(json.replace("CMD/OPT/S", "")) }
+        assertFails { parseWebringNeighbors(json.replace("API previous", "")) }
         assertFails { parseWebringNeighbors("not json") }
     }
 }

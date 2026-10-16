@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir } from 'node:fs/promises';
+import { mkdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -16,10 +16,44 @@ async function headerGeometry(page) {
         }));
 }
 
+async function assertShellDimensions(page, width) {
+    const mobile = width < 720;
+    const box = selector => page.locator(selector).boundingBox();
+    const near = (actual, expected, label) => assert.ok(Math.abs(actual - expected) < 0.03, `${label}: expected ${expected}, got ${actual}`);
+    const header = await box('.app-header');
+    near(header.x, 0, 'Header left'); near(header.y, 0, 'Header top');
+    near(header.height, mobile ? 69 : 60, 'Header height');
+    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '1');
+    assert.equal(await page.locator('.brand').isVisible(), !mobile);
+    assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
+    assert.equal(await page.locator('.workspace-label').isVisible(), width >= 1000);
+    assert.equal(await page.locator('.header-language').isVisible(), width >= 1000);
+    for (const selector of ['.desktop-theme', '.header-github']) {
+        assert.equal(await page.locator(selector).isVisible(), !mobile);
+        if (!mobile) { const control = await box(selector); near(control.width, 44, `${selector} width`); near(control.height, 44, `${selector} height`); }
+    }
+    const ring = await box('.webring');
+    near(ring.y, 12, 'Webring top');
+    near(ring.height, mobile ? 44 : 36, 'Webring height');
+    near(ring.width, mobile ? header.width - 48 : 344, 'Webring width');
+    if (mobile) near(ring.x, 24, 'Mobile webring left');
+    else {
+        const brand = await box('.brand'), tabs = await box('.editor-tabs');
+        near(brand.x, width < 1000 ? 24 : 32, 'Brand left');
+        near(brand.height, 32, 'Brand height');
+        near(tabs.y, 60, 'Tabs top'); near(tabs.height, 45, 'Tabs height');
+    }
+}
+
 test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
     const root = fileURLToPath(new URL('../..', import.meta.url));
+    // Exercise the same typed page registry as Ktor, including newly registered pages.
+    const source = await readFile(resolve(root, 'website/src/main/kotlin/com/itzephir/website/Portfolio.kt'), 'utf8');
+    const registry = source.slice(source.indexOf('enum class PortfolioPage'), source.indexOf('private const val telegram'));
+    const routes = [...registry.matchAll(/^\s+\w+\("([^"]+)",/gm)].map(match => match[1]);
+    assert.ok(routes.length >= 3 && routes.includes('/'), 'Portfolio page registry must be discoverable');
     const distribution = resolve(process.env.WEBSITE_DIST ?? resolve(root, 'website/build/install/website'));
     const screenshots = resolve(process.env.BROWSER_OUTPUT ?? resolve(root, 'website/build/browser-check'));
     await mkdir(screenshots, { recursive: true });
@@ -52,10 +86,12 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
             await page.setViewportSize({ width, height: 1000 });
             let expectedHeader;
             for (const theme of ['dark', 'light']) {
-                for (const path of ['/', '/projects', '/about']) {
+                for (const path of routes) {
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
                     const actualHeader = await headerGeometry(page);
+                    await assertShellDimensions(page, width);
                     assert.equal(await page.locator('.workspace-label').textContent(), path);
+                    assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
                     expectedHeader ??= actualHeader;
                     assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);

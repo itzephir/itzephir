@@ -3,14 +3,18 @@
 Read `README.md` for runtime and navigation behavior and `DESIGN.md` for the
 approved visual baseline. Keep `DESIGN.md` curated: record approved changes
 instead of replacing it with generated Figma data. Root Git workflow rules apply.
+The accepted [site shell contract](architecture/site-shell.md) is an architectural
+requirement, enforced in CI. Do not weaken its tests or regenerate its fixture to
+accept an incidental page change. Deliberate changes require an explicit
+architectural change with the ADR, Figma masters and verification updated together.
 
 ## Rendering and assets
 
 - Keep Ktor + kotlinx.html server rendering and the existing HTMX enhancement.
   Navigation, theme switching, tabs and webring must work without JavaScript.
-- Render shared chrome in `src/main/kotlin/com/itzephir/website/Portfolio.kt`
-  and keep its layout in
-  `src/main/resources/static/styles.css`. Reuse the shared renderer on new pages.
+- `src/main/kotlin/com/itzephir/website/SiteShell.kt` alone owns shared chrome;
+  `src/main/resources/static/site-shell.css` alone owns its selectors. Pages in
+  `Portfolio.kt` supply main content, not shell markup or layout overrides.
 - Use the existing theme variables and self-hosted fonts/assets. Reference static
   resources through `asset(...)` to preserve cache invalidation.
 - Check changes in both dark and light themes. Theme switching must preserve the
@@ -51,6 +55,9 @@ instead of replacing it with generated Figma data. Root Git workflow rules apply
   `https://webring.otomir23.me/itzephir/next`. Do not replace them with direct
   neighbor URLs or JavaScript-only navigation. Neighbor lookup must not delay
   rendering or hide the widget on upstream failure.
+- Get neighbor names from `/itzephir/data`; never hardcode members' names. Retain
+  the last successful response during an outage and use direction labels only
+  before the first successful response.
 
 ## Pages and editor tabs
 
