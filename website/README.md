@@ -61,6 +61,11 @@ They are visible in the first viewport without JavaScript, including at 320 px.
 On mobile the three links have 44 px touch targets; the header has no brand or
 page tabs. Theme switching sits beside the greeting or Back link.
 
+The header uses the same dimensions and control sizes on every route and in
+both themes. A stable scrollbar gutter prevents horizontal jumps between short
+and long pages. Opening or closing editor tabs only changes the tab strip and
+page content, not the header layout.
+
 `Webring.kt` refreshes neighbor names from the ring's public `/itzephir/data`
 endpoint in the background, at most every five minutes. HTML always receives
 the last known names immediately. Failures retain the cached names and retry

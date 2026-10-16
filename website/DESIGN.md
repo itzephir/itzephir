@@ -30,13 +30,16 @@ self-hosted; font and icon license notices are under `third_party`.
 
 The implementation uses fluid widths and a 720 px breakpoint. The mobile header
 contains the webring only; routes are reached through content links and Back.
+Within each breakpoint, header dimensions, alignment and control sizes are shared
+by all routes and both themes; page-specific header geometry is not allowed.
 Desktop tabs represent visited pages, preserve their opening order in the
 session, and provide separate close controls. See `README.md` for tab behavior.
 The profile route adapts the existing biography to the same style because the
 baseline includes a profile shortcut but no separate profile screen.
 
 Browser verification captures both baseline pages in both themes and checks
-320/390/719/720/768/1440 px layouts, loaded assets, logo size, visible named ring
+320/390/719/720/768/999/1000/1440 px layouts, identical header geometry across
+welcome/projects/about and both themes, loaded assets, logo size, visible named ring
 links, 44 px mobile touch targets, theme persistence, and navigation without JS.
 Screenshots are generated under `website/build/browser-check` and uploaded as
 the `portfolio-screenshots` CI artifact.

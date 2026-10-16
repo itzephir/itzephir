@@ -7,6 +7,15 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
 
+async function headerGeometry(page) {
+    await page.evaluate(() => document.fonts.ready);
+    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .header-language, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
+        elements.filter(element => element.getClientRects().length).map(element => {
+            const { x, y, width, height } = element.getBoundingClientRect();
+            return { element: element.classList[0], box: [x, y, width, height].map(value => Math.round(value * 100) / 100) };
+        }));
+}
+
 test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
@@ -38,6 +47,20 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         page.on('pageerror', error => errors.push(error.message));
         page.on('response', response => { if (response.status() >= 400) failedResponses.push(response.url()); });
         page.on('request', request => requests.push(request.url()));
+        // The shared shell must not move when the page, theme or scrollbar changes.
+        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 320]) {
+            await page.setViewportSize({ width, height: 1000 });
+            let expectedHeader;
+            for (const theme of ['dark', 'light']) {
+                for (const path of ['/', '/projects', '/about']) {
+                    await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
+                    const actualHeader = await headerGeometry(page);
+                    expectedHeader ??= actualHeader;
+                    assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
+                    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);
+                }
+            }
+        }
         for (const theme of ['dark', 'light']) {
             await page.emulateMedia({ colorScheme: theme });
             for (const width of [1440, 768, 720, 719, 390, 320]) {
@@ -126,14 +149,17 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         const tabKeys = () => workspace.locator('.editor-tab').evaluateAll(tabs => tabs.map(tab => tab.dataset.tab));
         const activeTab = () => workspace.locator('.editor-tab-link[aria-current="page"]').textContent();
         await workspace.goto(base, { waitUntil: 'networkidle' });
+        const workspaceHeader = await headerGeometry(workspace);
         assert.deepEqual(await tabKeys(), ['welcome']);
         assert.equal(await workspace.locator('.tab-close').count(), 0);
         await workspace.locator('.shortcut[href="/projects"]').click();
         await workspace.waitForURL(`${base}/projects`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects']);
         await workspace.locator('.editor-tab-link[href="/"]').click();
         await workspace.locator('.shortcut[href="/about"]').click();
         await workspace.waitForURL(`${base}/about`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         assert.equal((await activeTab()).trim(), 'about.md');
         await workspace.evaluate(() => document.fonts.ready);
@@ -142,6 +168,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         await workspace.locator('.theme-toggle:visible').click();
         await workspace.waitForSelector('#portfolio[data-theme="light"]');
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
         await workspace.reload({ waitUntil: 'networkidle' });
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
@@ -154,6 +181,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.equal((await activeTab()).trim(), 'projects');
         await workspace.getByRole('button', { name: 'Закрыть projects', exact: true }).click();
         await workspace.waitForURL(`${base}/`);
+        assert.deepEqual(await headerGeometry(workspace), workspaceHeader);
         assert.deepEqual(await tabKeys(), ['welcome']);
         assert.equal(await workspace.locator('#portfolio').getAttribute('data-theme'), 'light');
         await workspace.reload({ waitUntil: 'networkidle' });
