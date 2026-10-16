@@ -10,7 +10,6 @@ import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.ApplicationStopped
 import io.ktor.server.application.call
 import io.ktor.server.application.createRouteScopedPlugin
-import io.ktor.server.html.respondHtml
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.request.path
 import io.ktor.server.response.header
@@ -35,8 +34,9 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
             install(createRouteScopedPlugin("LocatorPageHeaders") {
                 onCall { call ->
                     call.response.header(HttpHeaders.CacheControl, "no-store")
-                    call.response.header("Content-Security-Policy", "default-src 'none'; style-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
-                    call.response.header("Referrer-Policy", "no-referrer")
+                    call.response.header("Content-Security-Policy", "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+                    // Preserve same-origin form navigation; external destinations receive no referrer.
+                    call.response.header("Referrer-Policy", "same-origin")
                     call.response.header("X-Content-Type-Options", "nosniff")
                     if (call.request.path().startsWith(PANEL)) call.response.header("X-Robots-Tag", "noindex, nofollow")
                 }
@@ -44,23 +44,30 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
             get {
                 val offset = call.offset()
                 val projects = locator.publicProjects(25, offset)
-                call.respondHtml { page("Проекты в разработке") {
-                    div("page-heading") { p("eyebrow") { +"ITZEPHIR / DEVELOPMENT" }; h1 { +"Проекты в разработке" }; p("muted") { +"Сервисы, инструменты и новые идеи, над которыми я работаю." } }
+                call.renderPage("Проекты в разработке") {
+                    div("dev-gallery-meta") {
+                        p("eyebrow mono") { +"dev / Открытая мастерская" }
+                        a(PANEL, classes = "button secondary") { +"Панель проектов" }
+                    }
+                    div("page-heading") { h1 { +"Проекты в разработке" }; p("muted") { +"Сервисы, инструменты и новые идеи, над которыми я работаю." } }
+                    p("eyebrow mono") { +"ОПУБЛИКОВАНО / ${projects.take(24).size}" }
                     if (projects.isEmpty()) div("empty") { h2 { +"Новые проекты скоро появятся" }; p { +"Здесь будут собраны проекты в разработке." } }
                     div("project-grid") { projects.take(24).forEach { project ->
                         article("project-card") {
-                            span("eyebrow") { +"В РАЗРАБОТКЕ" }
                             h2 { +project.project }
-                            p("muted mono") { +"/${project.slug}" }
-                            a("/dev/project/${project.slug}/", classes = "project-link") { +"Открыть проект →" }
+                            p("muted mono") { +"/dev/project/${project.slug}/" }
+                            div("project-card-actions") {
+                                a("/dev/project/${project.slug}/", classes = "project-link") { +"Открыть проект" }
+                                span("help") { +"В разработке" }
+                            }
                         }
                     } }
                     pagination("/dev", offset, 24, projects.size > 24)
-                } }
+                }
             }
             get("/") { call.seeOther("/dev") }
             get("/assets/style.css") {
-                call.respondText(checkNotNull(javaClass.getResource("/panel/style.css")).readText(), ContentType.Text.CSS)
+                call.respondText(javaClass.getResource("/static/dev.css")?.readText().orEmpty(), ContentType.Text.CSS)
             }
             get("/panel") {
                 if (auth == null) throw LocatorException(503, "panel_unconfigured", "Panel sign in is not configured")
@@ -80,18 +87,32 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                 }
                 val projects = locator.list(actor, status, 51, offset)
                 val formToken = csrf(token)
-                call.respondHtml { page("Панель проектов", actor, formToken) {
-                    div("page-heading") { p("eyebrow") { +"ПАНЕЛЬ УПРАВЛЕНИЯ" }; h1 { +(if (actor.role == IdentityRole.ADMIN) "Все проекты" else "Мои проекты") }; p("muted") { +(if (actor.role == IdentityRole.ADMIN) "Создавайте проекты, проверяйте заявки и редактируйте данные." else "Настройки и статус ваших проектов.") } }
+                call.renderPage("Панель проектов", actor, formToken) {
+                    div("page-heading") {
+                        h1 { +(if (actor.role == IdentityRole.ADMIN && status == ProjectStatus.PENDING) "Заявки" else if (actor.role == IdentityRole.ADMIN) "Все проекты" else "Мои проекты") }
+                        p("muted") { +(if (actor.role == IdentityRole.ADMIN && status == ProjectStatus.PENDING) "Проверьте имя и адрес перед публикацией." else if (actor.role == IdentityRole.ADMIN) "Проекты, заявки и доступы к ним." else "Настройки и статус ваших проектов.") }
+                    }
+                    if (actor.role == IdentityRole.ADMIN) {
+                        a("$PANEL/new", classes = "button") { +"Новый проект" }
+                        if (status == null && projects.any { it.status == ProjectStatus.PENDING }) div("notice") {
+                            h2 { +"Заявки ждут проверки" }
+                            p { +"Проверьте данные перед публикацией на витрине." }
+                            a("$PANEL?status=pending", classes = "button secondary") { +"Проверить заявки" }
+                        }
+                    }
                     nav("filters") {
-                        a(PANEL) { +"Все" }
-                        ProjectStatus.entries.forEach { state -> a("$PANEL?status=${state.databaseValue}") { +state.label() } }
+                        a(PANEL) { if (status == null) attributes["aria-current"] = "page"; +"Все" }
+                        ProjectStatus.entries.forEach { state -> a("$PANEL?status=${state.databaseValue}") { if (status == state) attributes["aria-current"] = "page"; +state.label() } }
                     }
                     if (projects.isEmpty()) div("empty") { p { +"Проектов с таким статусом пока нет." } }
                     div("project-list") { projects.take(50).forEach { project ->
                         article("project-row") {
-                            div { h2 { a("$PANEL/${project.id}/edit") { +project.project } }; p("muted mono") { +"/${project.slug}" } }
-                            div("row-actions") {
+                            h2 { a("$PANEL/${project.id}/edit") { +project.project } }
+                            div("project-row-meta") {
+                                p("muted mono") { +"/${project.slug}" }
                                 span("badge ${project.status.databaseValue}") { +project.status.label() }
+                            }
+                            div("row-actions") {
                                 a("$PANEL/${project.id}/edit", classes = "button secondary") { +"Редактировать" }
                                 if (actor.role == IdentityRole.ADMIN && project.status == ProjectStatus.PENDING) {
                                     reviewForm(project, "approve", "Одобрить", formToken)
@@ -101,11 +122,21 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                         }
                     } }
                     pagination(PANEL + (status?.let { "?status=${it.databaseValue}" } ?: ""), offset, 50, projects.size > 50)
-                    if (actor.role == IdentityRole.ADMIN) section("card create-project") {
-                        h2 { +"Новый проект" }; p("muted") { +"Проект администратора будет одобрен сразу." }
-                        form(action = "$PANEL/create", method = FormMethod.post) { hiddenCsrf(formToken); projectFields("", ""); button(type = ButtonType.submit) { +"Создать проект" } }
+
+                }
+            }
+            get("/panel/new") {
+                val actor = call.panelActor(auth)
+                requireAdmin(actor)
+                call.renderPage("Новый проект", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
+                    div("page-heading") { h1 { +"Новый проект" }; p("muted") { +"Проект администратора будет одобрен сразу." } }
+                    section("card") {
+                        form(action = "$PANEL/create", method = FormMethod.post) {
+                            hiddenCsrf(csrf(call.request.cookies[PANEL_COOKIE]!!)); projectFields("", "")
+                            button(type = ButtonType.submit) { +"Создать проект" }
+                        }
                     }
-                } }
+                }
             }
             post("/panel/login") {
                 val form = call.receiveParameters()
@@ -155,11 +186,11 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                 val form = call.receiveParameters()
                 verifyCsrf(call.request.cookies[PANEL_COOKIE], form)
                 val registration = locator.register(ProjectRequest(form["project"] ?: "", form["slug"] ?: ""), actor)
-                call.respondHtml { page("Проект создан", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
+                call.renderPage("Проект создан", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
                     h1 { +"Проект создан" }; p { +registration.project.project }
                     div("card") { h2 { +"Сохраните API-токен" }; p("muted") { +"Он показывается только сейчас. Используйте его для доступа к проекту." }; pre { code { +registration.token } } }
                     a("$PANEL/${registration.project.id}/edit", classes = "button") { +"К настройкам проекта" }
-                } }
+                }
             }
             post("/panel/{id}/owners") {
                 val actor = call.panelActor(auth)
@@ -173,22 +204,22 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
             get("/panel/users") {
                 val actor = call.panelActor(auth)
                 val users = auth!!.accounts.users(actor)
-                call.respondHtml { page("Пользователи", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
-                    h1 { +"Пользователи" }
-                    div("project-list") { users.forEach { user -> article("project-row") {
-                        h2 { +user.username }; span("muted") { +(if (user.role == IdentityRole.ADMIN) "Администратор" else "Владелец проектов") }
+                call.renderPage("Пользователи", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
+                    div("page-heading") { h1 { +"Пользователи" }; p("muted") { +"Управление доступом к проектам." } }
+                    div("card user-list") { users.forEach { user -> article("user-row") {
+                        h2 { +user.username }; span("help") { +(if (user.role == IdentityRole.ADMIN) "Администратор" else "Владелец проектов") }
                     } } }
                     section("card create-project") {
                         h2 { +"Добавить владельца" }
                         form(action = "$PANEL/users", method = FormMethod.post) {
                             hiddenCsrf(csrf(call.request.cookies[PANEL_COOKIE]!!))
-                            label { htmlFor = "username"; +"Логин" }; textInput(name = "username") { id = "username"; required = true; attributes["pattern"] = "[a-z0-9][a-z0-9_.-]{2,63}"; attributes["autocomplete"] = "off" }
-                            label { htmlFor = "new-password"; +"Пароль" }; passwordInput(name = "password") { id = "new-password"; required = true; attributes["minlength"] = "12"; attributes["maxlength"] = "256"; attributes["autocomplete"] = "new-password" }
+                            div("field") { label { htmlFor = "username"; +"Логин" }; textInput(name = "username") { id = "username"; required = true; attributes["pattern"] = "[a-z0-9][a-z0-9_.-]{2,63}"; attributes["autocomplete"] = "off" } }
+                            div("field") { label { htmlFor = "new-password"; +"Пароль" }; passwordInput(name = "password") { id = "new-password"; required = true; attributes["minlength"] = "12"; attributes["maxlength"] = "256"; attributes["autocomplete"] = "new-password" } }
                             p("help") { +"Не менее 12 символов. Проекты можно назначить в их настройках." }
                             button(type = ButtonType.submit) { +"Добавить пользователя" }
                         }
                     }
-                } }
+                }
             }
             post("/panel/users") {
                 val actor = call.panelActor(auth)
@@ -202,14 +233,14 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                 val actor = call.panelActor(auth)
                 val user = auth!!.accounts.user(actor.id)
                 val formToken = csrf(call.request.cookies[PANEL_COOKIE]!!)
-                call.respondHtml { page("Моя учётная запись", actor, formToken) {
-                    h1 { +"Моя учётная запись" }; p("muted") { +user.username }
+                call.renderPage("Моя учётная запись", actor, formToken) {
+                    div("page-heading") { h1 { +"Моя учётная запись" }; p("muted") { +user.username } }
                     section("card") {
-                        h2 { +"Пароль" }
+                        h2 { +"Изменить пароль" }
                         form(action = "$PANEL/account/password", method = FormMethod.post) {
                             hiddenCsrf(formToken)
-                            if (user.hasPassword) { label { htmlFor = "current-password"; +"Текущий пароль" }; passwordInput(name = "current") { id = "current-password"; required = true; attributes["autocomplete"] = "current-password" } }
-                            label { htmlFor = "new-password"; +"Новый пароль" }; passwordInput(name = "password") { id = "new-password"; required = true; attributes["minlength"] = "12"; attributes["maxlength"] = "256"; attributes["autocomplete"] = "new-password" }
+                            if (user.hasPassword) div("field") { label { htmlFor = "current-password"; +"Текущий пароль" }; passwordInput(name = "current") { id = "current-password"; required = true; attributes["maxlength"] = "256"; attributes["autocomplete"] = "current-password" } }
+                            div("field") { label { htmlFor = "new-password"; +"Новый пароль" }; passwordInput(name = "password") { id = "new-password"; required = true; attributes["minlength"] = "12"; attributes["maxlength"] = "256"; attributes["autocomplete"] = "new-password" } }
                             p("help") { +"Не менее 12 символов. Старые сессии будут завершены." }
                             button(type = ButtonType.submit) { +"Сохранить пароль" }
                         }
@@ -218,7 +249,7 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                         h2 { +"GitHub" }; p("muted") { +(user.githubLogin?.let { "Подключён аккаунт @$it" } ?: "Подключите GitHub, чтобы входить без пароля.") }
                         form(action = "$PANEL/github", method = FormMethod.post) { hiddenCsrf(formToken); button(type = ButtonType.submit, classes = "secondary") { +"Подключить GitHub" } }
                     }
-                } }
+                }
             }
             post("/panel/account/password") {
                 val actor = call.panelActor(auth)
@@ -291,33 +322,33 @@ private suspend fun ApplicationCall.seeOther(location: String) { response.header
 private fun ApplicationCall.offset(): Int = request.queryParameters["offset"]?.let { it.toIntOrNull()?.takeIf { value -> value in 0..1_000_000 } ?: throw LocatorException(400, "invalid_pagination", "Invalid offset") } ?: 0
 
 internal suspend fun ApplicationCall.panelError(error: LocatorException) {
-    respondHtml(HttpStatusCode.fromValue(error.status)) { page("Действие недоступно") {
+    renderPage("Действие недоступно", status = HttpStatusCode.fromValue(error.status)) {
         h1 { +"Действие недоступно" }; p("notice") { +error.friendly() }; a(PANEL, classes = "button") { +"Вернуться в панель" }
-    } }
+    }
 }
 
 private suspend fun ApplicationCall.loginPage(formToken: String, error: String? = null, status: HttpStatusCode = HttpStatusCode.OK, githubEnabled: Boolean = false) {
-    respondHtml(status) { page("Вход в панель") {
+    renderPage("Вход в панель", status = status) {
+        div("page-heading") { h1 { +"Вход в панель" }; p("muted") { +"Войдите, чтобы управлять своими проектами." } }
         section("card login-card") {
-            p("eyebrow") { +"ПАНЕЛЬ ПРОЕКТОВ" }; h1 { +"Вход" }; p("muted") { +"Войдите в свою учётную запись." }
             if (error != null) p("notice") { attributes["role"] = "alert"; +error }
             form(action = "$PANEL/login", method = FormMethod.post) {
                 hiddenCsrf(formToken)
-                label { htmlFor = "username"; +"Логин" }
-                textInput(name = "username") { id = "username"; required = true; attributes["maxlength"] = "64"; attributes["autocomplete"] = "username" }
-                label { htmlFor = "password"; +"Пароль" }
-                passwordInput(name = "password") { id = "password"; required = true; attributes["maxlength"] = "256"; attributes["autocomplete"] = "current-password" }
+                div("field") { label { htmlFor = "username"; +"Логин" }
+                    textInput(name = "username") { id = "username"; required = true; attributes["maxlength"] = "64"; attributes["autocomplete"] = "username" } }
+                div("field") { label { htmlFor = "password"; +"Пароль" }
+                    passwordInput(name = "password") { id = "password"; required = true; attributes["maxlength"] = "256"; attributes["autocomplete"] = "current-password" } }
                 button(type = ButtonType.submit) { +"Войти" }
             }
             if (githubEnabled) form(action = "$PANEL/github", method = FormMethod.post) { hiddenCsrf(formToken); button(type = ButtonType.submit, classes = "secondary") { +"Войти через GitHub" } }
         }
-    } }
+    }
 }
 
 private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, formToken: String, error: LocatorException? = null, users: List<WebUser> = emptyList(), owners: Set<String> = emptySet()) {
-    respondHtml(error?.let { HttpStatusCode.fromValue(it.status) } ?: HttpStatusCode.OK) { page("Настройки проекта", actor, formToken) {
-        a(PANEL, classes = "back-link") { +"← К проектам" }
-        div("page-heading") { h1 { +"Настройки проекта" }; span("badge ${project.status.databaseValue}") { +project.status.label() } }
+    renderPage("Настройки проекта", actor, formToken, status = error?.let { HttpStatusCode.fromValue(it.status) } ?: HttpStatusCode.OK) {
+        a(PANEL, classes = "back-link") { +"К проектам" }
+        div("page-heading") { h1 { +"Настройки проекта" }; p("muted") { +project.project }; span("badge ${project.status.databaseValue}") { +project.status.label() } }
         if (error != null) p("notice") { attributes["role"] = "alert"; +error.friendly(); +" "; a("$PANEL/${project.id}/edit") { +"Обновить данные" } }
         section("card") {
             form(action = "$PANEL/${project.id}/edit", method = FormMethod.post) {
@@ -339,31 +370,10 @@ private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, 
             }
         }
         section("card details") {
-            h2 { +"Адреса проекта" }; p { +"Production: "; a(project.productionUrl) { +project.productionUrl } }; p { +"Stage: "; a(project.stageUrl) { +project.stageUrl } }
+            h2 { +"Адреса проекта" }
+            p("eyebrow mono") { +"PRODUCTION" }; p("mono") { a(project.productionUrl) { +project.productionUrl.removePrefix("https://") } }
+            p("eyebrow mono") { +"STAGE" }; p("mono") { a(project.stageUrl) { +project.stageUrl.removePrefix("https://") } }
         }
-    } }
-}
-
-private fun HTML.page(title: String, actor: Identity? = null, formToken: String = "", content: MAIN.() -> Unit) {
-    lang = "ru"
-    head { meta { charset = "utf-8" }; meta { name = "viewport"; this.content = "width=device-width, initial-scale=1" }; title { +"$title · itzephir" }; link(rel = "stylesheet", href = "/dev/assets/style.css") }
-    body {
-        a("#content", classes = "skip-link") { +"К содержимому" }
-        header {
-            a("/", classes = "brand") { +"itzephir"; span { +"/ dev" } }
-            nav {
-                a("/dev") { +"Витрина" }
-                if (actor == null) a(PANEL) { +"Управление" } else {
-                    a(PANEL) { +"Проекты" }
-                    if (actor.role == IdentityRole.ADMIN) a("$PANEL/users") { +"Пользователи" }
-                    a("$PANEL/account") { +"Аккаунт" }
-                    span("role") { +(if (actor.role == IdentityRole.ADMIN) "Администратор" else "Владелец проекта") }
-                    form(action = "$PANEL/logout", method = FormMethod.post) { hiddenCsrf(formToken); button(type = ButtonType.submit, classes = "secondary") { +"Выйти" } }
-                }
-            }
-        }
-        main { id = "content"; content() }
-        footer { +"itzephir · проекты в разработке" }
     }
 }
 
@@ -385,7 +395,7 @@ private fun FlowContent.pagination(base: String, offset: Int, step: Int, more: B
         if (more) a("$base${separator}offset=${offset + step}") { +"Далее →" }
     }
 }
-private fun ProjectStatus.label() = when (this) { ProjectStatus.PENDING -> "На проверке"; ProjectStatus.APPROVED -> "Одобрен"; ProjectStatus.REJECTED -> "Отклонён" }
+private fun ProjectStatus.label() = when (this) { ProjectStatus.PENDING -> "На проверке"; ProjectStatus.APPROVED -> "Опубликован"; ProjectStatus.REJECTED -> "Отклонён" }
 private fun LocatorException.friendly() = when (code) {
     "panel_unconfigured" -> "Панель пока недоступна."
     "github_unconfigured" -> "Вход через GitHub пока недоступен."
@@ -397,7 +407,7 @@ private fun LocatorException.friendly() = when (code) {
     "invalid_owners" -> "Проверьте список владельцев проекта."
     "login_limited" -> "Слишком много попыток входа. Попробуйте через 15 минут."
     "invalid_session" -> "Сессия завершена. Войдите снова."
-    "project_not_found" -> "Проект не найден или недоступен для вашей identity."
+    "project_not_found" -> "Проект не найден или недоступен для вашей учётной записи."
     "admin_required" -> "Это действие доступно только администратору."
     "csrf_failed" -> "Форма устарела. Обновите страницу и повторите действие."
     "project_conflict" -> "Имя проекта или slug уже заняты."

@@ -42,7 +42,7 @@ fun Application.module(
     locator: PostgresLocator? = null,
     panelAuth: PanelAuth? = null,
 ) {
-    if (locator != null) projectLocator(locator, secureCookies, panelAuth)
+    if (locator != null) projectLocator(locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames))
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
@@ -111,7 +111,7 @@ fun Application.module(
     }
 }
 
-private fun ApplicationCall.saveTabs(tabs: WorkspaceTabs, secureCookies: Boolean) {
+internal fun ApplicationCall.saveTabs(tabs: WorkspaceTabs, secureCookies: Boolean) {
     response.cookies.append(
         Cookie("workspace_tabs", tabs.cookieValue, path = "/", httpOnly = true, secure = secureCookies, extensions = mapOf("SameSite" to "Lax")),
     )
