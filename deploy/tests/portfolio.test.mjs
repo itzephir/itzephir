@@ -108,7 +108,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.equal(await page.locator('#portfolio').getAttribute('data-theme'), 'light');
         await page.goto(`${base}/about`, { waitUntil: 'networkidle' });
         assert.equal(await page.locator('h1').textContent(), 'Обо мне');
-        assert.ok((await page.locator('.profile-panel').textContent()).includes('одной лекцией'));
+        assert.ok((await page.locator('.profile-panel').textContent()).includes('Лектор ШМР Яндекса · 2026'));
         assert.ok(requests.every(url => url.startsWith(base)), 'Every browser asset must be self-hosted');
         assert.deepEqual(errors, []);
         assert.deepEqual(failedResponses, []);
@@ -128,7 +128,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         await workspace.locator('.shortcut[href="/about"]').click();
         await workspace.waitForURL(`${base}/about`);
         assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
-        assert.equal((await activeTab()).trim(), 'profile.kt');
+        assert.equal((await activeTab()).trim(), 'about.md');
         await workspace.evaluate(() => document.fonts.ready);
         await workspace.screenshot({ path: resolve(screenshots, 'tabs-open-dark.png'), fullPage: true });
         await workspace.locator('.editor-tab-link[href="/projects"]').click();
@@ -141,7 +141,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.ok((await tabsContext.cookies()).some(cookie => cookie.name === 'workspace_tabs' && cookie.httpOnly));
         await workspace.screenshot({ path: resolve(screenshots, 'tabs-open-light.png'), fullPage: true });
         // Closing an inactive tab must preserve the active page and its content.
-        await workspace.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        await workspace.getByRole('button', { name: 'Закрыть about.md', exact: true }).click();
         assert.equal(new URL(workspace.url()).pathname, '/projects');
         assert.deepEqual(await tabKeys(), ['welcome', 'projects']);
         assert.equal((await activeTab()).trim(), 'projects');
@@ -155,12 +155,12 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         await workspace.getByRole('button', { name: 'Закрыть welcome.md', exact: true }).click();
         assert.equal(new URL(workspace.url()).pathname, '/about');
         assert.deepEqual(await tabKeys(), ['profile']);
-        await workspace.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        await workspace.getByRole('button', { name: 'Закрыть about.md', exact: true }).click();
         await workspace.waitForURL(`${base}/`);
         assert.deepEqual(await tabKeys(), ['welcome']);
         await workspace.goBack({ waitUntil: 'networkidle' });
         assert.equal(new URL(workspace.url()).pathname, '/about');
-        assert.equal((await activeTab()).trim(), 'profile.kt');
+        assert.equal((await activeTab()).trim(), 'about.md');
         await tabsContext.close();
 
         const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
@@ -182,7 +182,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         assert.equal(new URL(plain.url()).pathname, '/');
         assert.deepEqual(await plain.locator('.editor-tab').evaluateAll(tabs => tabs.map(tab => tab.dataset.tab)), ['welcome']);
         await plain.locator('.shortcut[href="/about"]').click();
-        await plain.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        await plain.getByRole('button', { name: 'Закрыть about.md', exact: true }).click();
         assert.equal(new URL(plain.url()).pathname, '/');
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await noJs.close();

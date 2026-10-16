@@ -18,7 +18,7 @@ enum class PortfolioPage(val path: String, val title: String) {
     val tabLabel: String get() = when (this) {
         Welcome -> "welcome.md"
         Projects -> "projects"
-        Profile -> "profile.kt"
+        Profile -> "about.md"
     }
     val tabIcon: String get() = when (this) {
         Welcome -> "file"
@@ -53,11 +53,11 @@ fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, nei
         meta { charset = "utf-8" }
         meta { name = "viewport"; content = "width=device-width, initial-scale=1" }
         title { +page.title }
-        meta { name = "description"; content = "Дмитрий Дворянников — Kotlin-разработчик из Москвы. Работаю в Яндексе и собираю собственные продукты." }
+        meta { name = "description"; content = "Дмитрий Дворянников — Kotlin-разработчик из Москвы. Инфраструктура и собственные проекты." }
         meta { attributes["property"] = "og:type"; content = "website" }
         meta { attributes["property"] = "og:url"; content = "https://itzephir.com${page.path}" }
         meta { attributes["property"] = "og:title"; content = page.title }
-        meta { attributes["property"] = "og:description"; content = "Мобильные приложения, backend и собственные проекты на Kotlin." }
+        meta { attributes["property"] = "og:description"; content = "Инфраструктура, сервисы и собственные проекты на Kotlin." }
         meta { attributes["property"] = "og:image"; content = "https://itzephir.com${asset("avatar.jpg")}" }
         meta { name = "htmx-config"; content = "{\"allowEval\":false,\"allowScriptTags\":false,\"selfRequestsOnly\":true}" }
         link { rel = "canonical"; href = "https://itzephir.com${page.path}" }
@@ -163,7 +163,7 @@ private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
         div("identity-and-theme") {
             div("greeting") {
                 img(src = asset("portrait.png"), alt = "Дмитрий Дворянников", classes = "portrait") { width = "56"; height = "56"; attributes["fetchpriority"] = "high" }
-                div { p("greeting-title") { +"Привет!" }; p("mono muted greeting-role") { +"Kotlin · Mobile & Backend" } }
+                div { p("greeting-title") { +"Привет!" }; p("mono muted greeting-role") { +"Инфраструктура · Проекты" } }
             }
             themeToggle(theme, page, true)
         }
@@ -171,8 +171,7 @@ private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
             id = "name"; span { +"Дмитрий" }; +" "
             span { +"Дворянников"; span("personal-cursor") { attributes["aria-hidden"] = "true" } }
         }
-        p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе и собираю собственные продукты." }
-        p("lecture muted") { +"Выступил с лекцией в ШМР 2026" }
+        p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе, занимаюсь инфраструктурой и создаю собственные проекты." }
     }
     section("shortcuts content-width") {
         attributes["aria-labelledby"] = "shortcuts-heading"
@@ -182,7 +181,7 @@ private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
         }
         div("shortcut-grid") {
             shortcut(theme, "01", "/projects", "projects/", "folder-open", "Посмотреть проекты", "От launcher для macOS до backend.", "Инструменты и приложения.")
-            shortcut(theme, "02", "/about", "profile.kt", "profile", "Познакомиться ближе", "Опыт, технологии и подход к работе.", "Опыт, технологии и подход.")
+            shortcut(theme, "02", "/about", "about.md", "profile", "Познакомиться ближе", "Опыт, технологии и подход к работе.", "Опыт, технологии и подход.")
             shortcut(theme, "03", telegram, "contacts", "messages", "Написать напрямую", "Telegram, почта или GitHub.")
         }
     }
@@ -270,15 +269,15 @@ private fun FlowContent.contactCard(theme: Theme) {
 private fun FlowContent.profile(theme: Theme, page: PortfolioPage) {
     div("page-content profile-content content-width") {
         section("page-introduction") {
-            pageControls(theme, page); p("page-meta mono") { +"profile.kt /" }; h1 { +"Обо мне" }
-            p("page-description muted") { +"Kotlin · Mobile & Backend" }
+            pageControls(theme, page); p("page-meta mono") { +"about.md /" }; h1 { +"Обо мне" }
+            p("page-description muted") { +"Инфраструктура и собственные проекты" }
         }
         section("profile-panel") {
             h2 { +"Дмитрий Дворянников" }
-            p { +"Я Kotlin-разработчик из Москвы, работаю в Яндексе. Люблю задачи на стыке инженерии и продукта: продумывать архитектуру, собирать UI и доводить идею до работающего релиза." }
-            p { +"В фокусе — Kotlin Multiplatform, Compose, Android и backend на Ktor. Иногда ухожу в Swift, инфраструктуру и инструменты для разработчиков." }
-            p { +"В 2026 году выступил с одной лекцией в Школе мобильной разработки Яндекса." }
-            ul("stack-list mono") { listOf("Kotlin", "KMP", "Compose", "Ktor", "Android", "Swift", "Docker").forEach { li { +it } } }
+            p { +"Я Kotlin-разработчик из Москвы, работаю в Яндексе." }
+            p { +"Сейчас мой фокус — инфраструктура и собственные проекты: от разработки до деплоя и поддержки." }
+            p { +"Лектор ШМР Яндекса · 2026" }
+            ul("stack-list mono") { listOf("Kotlin", "Ktor", "Docker", "Linux", "CI/CD").forEach { li { +it } } }
             a("/projects", classes = "text-link") { +"Мои проекты" }
         }
         contactCard(theme); siteFooter(false)
@@ -288,7 +287,7 @@ private fun FlowContent.siteFooter(home: Boolean) {
     footer("site-footer content-width${if (home) " home-footer" else ""}") {
         div("footer-main") {
             a("/", classes = "mono muted footer-path") { +"~/itzephir" }
-            if (home) span("mono muted footer-summary") { +"mobile / backend / own projects" }
+            if (home) span("mono muted footer-summary") { +"infrastructure / own projects" }
             nav("footer-links") {
                 attributes["aria-label"] = "Контакты"
                 externalLink(telegram, "contact-link") { +"Telegram" }; externalLink(github, "contact-link") { +"GitHub" }
