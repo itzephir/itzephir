@@ -2,11 +2,13 @@ package com.itzephir.website
 
 import io.ktor.client.request.get
 import io.ktor.client.request.header
+import io.ktor.client.request.forms.submitForm
 import io.ktor.client.statement.bodyAsBytes
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.parametersOf
 import io.ktor.server.testing.testApplication
 import org.jsoup.Jsoup
 import java.io.ByteArrayInputStream
@@ -37,13 +39,73 @@ class ApplicationTest {
         assertEquals("Мои проекты", projectPage.selectFirst("h1")!!.text())
         assertEquals(6, projectPage.select("a.project").size)
         assertEquals(6, projectPage.select("a.project").map { it.attr("href") }.toSet().size)
-        assertEquals("projects", projectPage.selectFirst(".editor-tab[aria-current=page]")!!.text().trim())
+        assertEquals("projects", projectPage.selectFirst(".editor-tab-link[aria-current=page]")!!.text().trim())
         assertEquals("/", projectPage.selectFirst(".back-link")!!.attr("href"))
         assertEquals("https://itzephir.com/projects", projectPage.selectFirst("link[rel=canonical]")!!.attr("href"))
         val profile = Jsoup.parse(client.get("/about").bodyAsText())
         assertEquals("Обо мне", profile.selectFirst("h1")!!.text())
         assertTrue(profile.text().contains("одной лекцией"))
         assertFalse(profile.text().contains("преподаю"))
+    }
+
+    @Test
+    fun `only visited pages become tabs and the session cookie preserves their order`() = testApplication {
+        application { module(secureCookies = true, neighborNames = { WebringNeighbors() }) }
+        val first = client.get("/")
+        val welcome = Jsoup.parse(first.bodyAsText())
+        assertEquals(listOf("welcome"), welcome.select(".editor-tab").map { it.attr("data-tab") })
+        assertTrue(welcome.select(".tab-close").isEmpty())
+        val projectResponse = client.get("/projects") { header(HttpHeaders.Cookie, "workspace_tabs=welcome") }
+        val project = Jsoup.parse(projectResponse.bodyAsText())
+        assertEquals(listOf("welcome", "projects"), project.select(".editor-tab").map { it.attr("data-tab") })
+        val cookie = projectResponse.headers.getAll(HttpHeaders.SetCookie)!!.single { it.startsWith("workspace_tabs=") }
+        listOf("workspace_tabs=welcome.projects", "HttpOnly", "Secure", "SameSite=Lax").forEach { assertTrue(cookie.contains(it)) }
+        assertFalse(cookie.contains("Max-Age", ignoreCase = true))
+        val profile = Jsoup.parse(client.get("/about") { header(HttpHeaders.Cookie, "workspace_tabs=welcome.projects") }.bodyAsText())
+        assertEquals(listOf("welcome", "projects", "profile"), profile.select(".editor-tab").map { it.attr("data-tab") })
+        assertEquals("profile.kt", profile.selectFirst(".editor-tab-link[aria-current=page]")!!.text())
+        profile.select(".tab-close-form").forEach {
+            assertEquals("post", it.attr("method")); assertEquals("/tabs/close", it.attr("action"))
+            assertEquals("profile", it.selectFirst("input[name=current]")!!.attr("value"))
+        }
+        val themed = Jsoup.parse(client.get("/about?theme=light") {
+            header(HttpHeaders.Cookie, "workspace_tabs=welcome.projects.profile")
+            header("HX-Request", "true")
+        }.bodyAsText())
+        assertEquals(listOf("welcome", "projects", "profile"), themed.select(".editor-tab").map { it.attr("data-tab") })
+        val direct = Jsoup.parse(client.get("/projects").bodyAsText())
+        assertEquals(listOf("projects"), direct.select(".editor-tab").map { it.attr("data-tab") })
+    }
+
+    @Test
+    fun `close form removes a tab and redirects only to the appropriate internal page`() = testApplication {
+        application { module(neighborNames = { WebringNeighbors() }) }
+        val noRedirect = client.config { followRedirects = false }
+        for ((closing, current, target, expectedCookie) in listOf(
+            listOf("profile", "profile", "/projects", "welcome.projects"),
+            listOf("projects", "profile", "/about", "welcome.profile"),
+            listOf("welcome", "projects", "/projects", "projects.profile"),
+        )) {
+            val response = noRedirect.submitForm("/tabs/close", parametersOf("tab" to listOf(closing), "current" to listOf(current))) {
+                header(HttpHeaders.Cookie, "workspace_tabs=welcome.projects.profile")
+            }
+            assertEquals(HttpStatusCode.SeeOther, response.status)
+            assertEquals(target, response.headers[HttpHeaders.Location])
+            assertTrue(response.headers[HttpHeaders.SetCookie]!!.startsWith("workspace_tabs=$expectedCookie;"))
+        }
+        val last = noRedirect.submitForm("/tabs/close", parametersOf("tab" to listOf("projects"), "current" to listOf("projects"))) {
+            header(HttpHeaders.Cookie, "workspace_tabs=projects")
+        }
+        assertEquals("/", last.headers[HttpHeaders.Location])
+        assertTrue(last.headers[HttpHeaders.SetCookie]!!.startsWith("workspace_tabs=welcome;"))
+        val invalid = noRedirect.submitForm("/tabs/close", parametersOf("tab" to listOf("https://example.com"), "current" to listOf("welcome")))
+        assertEquals(HttpStatusCode.BadRequest, invalid.status)
+        val crossSite = noRedirect.submitForm("/tabs/close", parametersOf("tab" to listOf("projects"), "current" to listOf("projects"))) {
+            header(HttpHeaders.Origin, "https://example.com")
+        }
+        assertEquals(HttpStatusCode.Forbidden, crossSite.status)
+        assertNull(crossSite.headers[HttpHeaders.SetCookie])
+        assertEquals(HttpStatusCode.MethodNotAllowed, client.get("/tabs/close").status)
     }
 
     @Test

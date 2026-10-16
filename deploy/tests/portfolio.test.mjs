@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
 
-test('Figma baseline: both themes, responsive pages, real navigation and no-JavaScript fallback', { timeout: 120_000 }, async () => {
+test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
     const root = fileURLToPath(new URL('../..', import.meta.url));
@@ -114,6 +114,55 @@ test('Figma baseline: both themes, responsive pages, real navigation and no-Java
         assert.deepEqual(failedResponses, []);
         await context.close();
 
+        const tabsContext = await browser.newContext({ viewport: { width: 1440, height: 1120 } });
+        const workspace = await tabsContext.newPage();
+        const tabKeys = () => workspace.locator('.editor-tab').evaluateAll(tabs => tabs.map(tab => tab.dataset.tab));
+        const activeTab = () => workspace.locator('.editor-tab-link[aria-current="page"]').textContent();
+        await workspace.goto(base, { waitUntil: 'networkidle' });
+        assert.deepEqual(await tabKeys(), ['welcome']);
+        assert.equal(await workspace.locator('.tab-close').count(), 0);
+        await workspace.locator('.shortcut[href="/projects"]').click();
+        await workspace.waitForURL(`${base}/projects`);
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects']);
+        await workspace.locator('.editor-tab-link[href="/"]').click();
+        await workspace.locator('.shortcut[href="/about"]').click();
+        await workspace.waitForURL(`${base}/about`);
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
+        assert.equal((await activeTab()).trim(), 'profile.kt');
+        await workspace.evaluate(() => document.fonts.ready);
+        await workspace.screenshot({ path: resolve(screenshots, 'tabs-open-dark.png'), fullPage: true });
+        await workspace.locator('.editor-tab-link[href="/projects"]').click();
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
+        await workspace.locator('.theme-toggle:visible').click();
+        await workspace.waitForSelector('#portfolio[data-theme="light"]');
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
+        await workspace.reload({ waitUntil: 'networkidle' });
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects', 'profile']);
+        assert.ok((await tabsContext.cookies()).some(cookie => cookie.name === 'workspace_tabs' && cookie.httpOnly));
+        await workspace.screenshot({ path: resolve(screenshots, 'tabs-open-light.png'), fullPage: true });
+        // Closing an inactive tab must preserve the active page and its content.
+        await workspace.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        assert.equal(new URL(workspace.url()).pathname, '/projects');
+        assert.deepEqual(await tabKeys(), ['welcome', 'projects']);
+        assert.equal((await activeTab()).trim(), 'projects');
+        await workspace.getByRole('button', { name: 'Закрыть projects', exact: true }).click();
+        await workspace.waitForURL(`${base}/`);
+        assert.deepEqual(await tabKeys(), ['welcome']);
+        assert.equal(await workspace.locator('#portfolio').getAttribute('data-theme'), 'light');
+        await workspace.reload({ waitUntil: 'networkidle' });
+        assert.deepEqual(await tabKeys(), ['welcome']);
+        await workspace.locator('.shortcut[href="/about"]').click();
+        await workspace.getByRole('button', { name: 'Закрыть welcome.md', exact: true }).click();
+        assert.equal(new URL(workspace.url()).pathname, '/about');
+        assert.deepEqual(await tabKeys(), ['profile']);
+        await workspace.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        await workspace.waitForURL(`${base}/`);
+        assert.deepEqual(await tabKeys(), ['welcome']);
+        await workspace.goBack({ waitUntil: 'networkidle' });
+        assert.equal(new URL(workspace.url()).pathname, '/about');
+        assert.equal((await activeTab()).trim(), 'profile.kt');
+        await tabsContext.close();
+
         const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
         const plain = await noJs.newPage();
         await plain.goto(base);
@@ -128,6 +177,14 @@ test('Figma baseline: both themes, responsive pages, real navigation and no-Java
         await plain.locator('.back-link').click();
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await plain.screenshot({ path: resolve(screenshots, 'no-js-390.png'), fullPage: true });
+        await plain.setViewportSize({ width: 1440, height: 1000 });
+        await plain.getByRole('button', { name: 'Закрыть projects', exact: true }).click();
+        assert.equal(new URL(plain.url()).pathname, '/');
+        assert.deepEqual(await plain.locator('.editor-tab').evaluateAll(tabs => tabs.map(tab => tab.dataset.tab)), ['welcome']);
+        await plain.locator('.shortcut[href="/about"]').click();
+        await plain.getByRole('button', { name: 'Закрыть profile.kt', exact: true }).click();
+        assert.equal(new URL(plain.url()).pathname, '/');
+        assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await noJs.close();
     } finally {
         await browser?.close();

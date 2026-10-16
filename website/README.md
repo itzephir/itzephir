@@ -41,6 +41,17 @@ is saved in an HTTP-only, SameSite=Lax cookie. Both the content and theme link
 work with JavaScript disabled. HTML responses are `no-store` and vary by cookie
 and HTMX headers; history restoration always gets a full document.
 
+Editor tabs contain only visited pages, in opening order. The first visit to
+`/` opens only `welcome.md`; `/projects` and `/about` open their own tabs when
+followed. A session cookie (`workspace_tabs`, HTTP-only and SameSite=Lax) keeps
+the open set through navigation, theme changes, and reloads. Opening an existing
+tab does not duplicate it. The close button is a separate POST form: closing an
+inactive tab preserves the current page, while closing the active one selects
+the previous neighbor (or next if there is no previous). Closing the final
+content tab returns to welcome; a lone welcome tab has no close button.
+These controls work with JavaScript disabled, and close targets are restricted
+to known internal pages. The mobile header continues to hide the tab strip.
+
 Page links and the mobile Back link use ordinary server routes. External
 project/contact links open a new tab. Webring links remain same-tab navigation,
 with the registered `itzephir/prev`, ring index, and `itzephir/next` URLs.

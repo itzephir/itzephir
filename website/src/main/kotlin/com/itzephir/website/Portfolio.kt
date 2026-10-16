@@ -13,7 +13,19 @@ enum class Theme(val value: String) {
 enum class PortfolioPage(val path: String, val title: String) {
     Welcome("/", "Дмитрий Дворянников — Kotlin Developer"),
     Projects("/projects", "Мои проекты — itzephir"),
-    Profile("/about", "Обо мне — itzephir"),
+    Profile("/about", "Обо мне — itzephir");
+    val tabKey: String get() = name.lowercase()
+    val tabLabel: String get() = when (this) {
+        Welcome -> "welcome.md"
+        Projects -> "projects"
+        Profile -> "profile.kt"
+    }
+    val tabIcon: String get() = when (this) {
+        Welcome -> "file"
+        Projects -> "folder"
+        Profile -> "profile"
+    }
+    companion object { fun fromTabKey(value: String): PortfolioPage? = entries.find { it.tabKey == value } }
 }
 
 private const val telegram = "https://t.me/ItzEphir"
@@ -35,7 +47,7 @@ internal fun asset(name: String): String = assets.computeIfAbsent(name) {
     "/assets/$name?v=$hash"
 }
 
-fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors()) {
+fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
     lang = "ru"
     head {
         meta { charset = "utf-8" }
@@ -64,16 +76,16 @@ fun HTML.document(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, nei
         link { rel = "preload"; href = asset("fonts/ibm-plex-sans.ttf"); attributes["as"] = "font"; type = "font/ttf"; attributes["crossorigin"] = "anonymous" }
         script { src = asset("htmx-2.0.11.min.js"); defer = true }
     }
-    body { portfolio(theme, page, neighbors) }
+    body { portfolio(theme, page, neighbors, tabs) }
 }
 
-fun FlowContent.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors()) {
-    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors) }
+fun FlowContent.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
+    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors, tabs) }
 }
-fun TagConsumer<*>.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors()) {
-    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors) }
+fun TagConsumer<*>.portfolio(theme: Theme, page: PortfolioPage = PortfolioPage.Welcome, neighbors: WebringNeighbors = WebringNeighbors(), tabs: WorkspaceTabs = WorkspaceTabs().open(page)) {
+    div("portfolio page-${page.name.lowercase()}") { portfolioContent(theme, page, neighbors, tabs) }
 }
-private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: WebringNeighbors) {
+private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: WebringNeighbors, tabs: WorkspaceTabs) {
     id = "portfolio"; attributes["data-theme"] = theme.value
     a("#content", classes = "skip-link") { +"Перейти к содержимому" }
     header("app-header") {
@@ -102,11 +114,8 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
         }
     }
     nav("editor-tabs mono") {
-        attributes["aria-label"] = "Разделы сайта"
-        editorTab(theme, "/", "welcome.md", "file", page == PortfolioPage.Welcome)
-        editorTab(theme, "/projects", "projects", "folder", page == PortfolioPage.Projects)
-        if (page == PortfolioPage.Profile) editorTab(theme, "/about", "profile.kt", "profile", true)
-        externalLink(telegram, "editor-tab") { icon(theme, "at-sign", 15); +"contacts" }
+        attributes["aria-label"] = "Открытые страницы"
+        tabs.pages.forEach { opened -> editorTab(theme, opened, page, tabs.canClose(opened)) }
     }
     main(if (page == PortfolioPage.Welcome) "welcome-canvas" else "page-canvas") {
         id = "content"
@@ -117,12 +126,25 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
         }
     }
 }
-private fun FlowContent.editorTab(theme: Theme, url: String, label: String, image: String, active: Boolean) {
-    a(url, classes = "editor-tab${if (active) " active" else ""}") {
-        if (active) attributes["aria-current"] = "page"
-        icon(theme, if (active && image in listOf("file", "folder")) "$image-active" else image, 15)
-        +label
-        if (active) span("tab-close") { icon(theme, "close", 12) }
+private fun FlowContent.editorTab(theme: Theme, opened: PortfolioPage, current: PortfolioPage, canClose: Boolean) {
+    val active = opened == current
+    div("editor-tab${if (active) " active" else ""}") {
+        attributes["data-tab"] = opened.tabKey
+        a(opened.path, classes = "editor-tab-link") {
+            if (active) attributes["aria-current"] = "page"
+            val image = opened.tabIcon
+            icon(theme, if (active && image in listOf("file", "folder")) "$image-active" else image, 15)
+            +opened.tabLabel
+        }
+        if (canClose) form(action = "/tabs/close", method = FormMethod.post, classes = "tab-close-form") {
+            input(type = InputType.hidden, name = "tab") { value = opened.tabKey }
+            input(type = InputType.hidden, name = "current") { value = current.tabKey }
+            button(type = ButtonType.submit, classes = "tab-close") {
+                attributes["aria-label"] = "Закрыть ${opened.tabLabel}"
+                title = "Закрыть ${opened.tabLabel}"
+                icon(theme, "close", 12)
+            }
+        }
     }
 }
 private fun FlowContent.themeToggle(theme: Theme, page: PortfolioPage, mobile: Boolean) {
