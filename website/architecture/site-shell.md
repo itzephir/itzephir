@@ -31,6 +31,9 @@ Theme and neighbor names are shared data, not page-specific layout options.
   keep their order, alignment and dimensions. The wordmark slot is 89.36 x 32 px;
   buttons are 44 x 44 px; the ring is 344 x 36 px. Horizontal padding is 32 px
   from 1000 px, and 24 px at 720–999 px, where path and language are hidden.
+  Paths longer than the fixed 11ch slot truncate to one line with an ellipsis;
+  the full path remains the registered document URL. Many visited tabs scroll
+  horizontally inside the unchanged 45 px strip rather than widening the page.
 - Below 720 px, the 69 px header contains only the webring with 24 px horizontal
   padding and 44 px link targets. Theme and Back remain in content; desktop tabs
   and branding are hidden. These rules apply to every route.

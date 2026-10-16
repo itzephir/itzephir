@@ -6,6 +6,14 @@ import io.ktor.client.statement.bodyAsText
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.testing.testApplication
+import io.ktor.server.application.call
+import io.ktor.server.routing.get
+import io.ktor.server.routing.routing
+import com.itzephir.locator.Identity
+import com.itzephir.locator.IdentityRole
+import com.itzephir.locator.LocatorPage
+import kotlinx.html.h1
+import java.util.UUID
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Element
 import kotlin.test.Test
@@ -15,9 +23,17 @@ import kotlin.test.assertNotNull
 class SiteShellContractTest {
     @Test
     fun `every route and response mode obeys the approved shell contract`() = testApplication {
-        application { module(neighborNames = { WebringNeighbors() }) }
+        val development = PortfolioPage.developmentPages + PortfolioPage.editProject(UUID.fromString("12345678-1234-1234-1234-123456789abc"))
+        application {
+            module(neighborNames = { WebringNeighbors() })
+            // Exercise the real host renderer without database/auth fixtures; those have integration tests.
+            val renderer = developmentRenderer(false) { WebringNeighbors() }
+            routing { development.forEach { page -> get(page.path) {
+                renderer.render(call, LocatorPage("Dev", Identity("test-admin", IdentityRole.ADMIN), "test-csrf", HttpStatusCode.OK) { h1 { +"Dev content" } })
+            } } }
+        }
         val expected = assertNotNull(javaClass.getResource("/contracts/site-header.html")).readText().trim()
-        for (page in PortfolioPage.entries) for (theme in Theme.entries) {
+        for (page in PortfolioPage.entries + development) for (theme in Theme.entries) {
             for (mode in listOf("document", "fragment", "history")) for (tabs in listOf("", "welcome.projects.profile")) {
                 val response = client.get("${page.path}?theme=${theme.value}") {
                     header(HttpHeaders.Cookie, "workspace_tabs=$tabs")

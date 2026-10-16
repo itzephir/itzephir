@@ -65,7 +65,8 @@ class WebPanelTest : LocatorDatabaseTest() {
         assertTrue(home.bodyAsText().contains("Мои проекты"))
         assertFalse(home.bodyAsText().contains(jwt))
         assertEquals(HttpStatusCode.Unauthorized, http.get("/api/project-locator/v1/identity") { header(HttpHeaders.Cookie, cookie) }.status)
-        val logout = http.form("$PANEL/logout", mapOf("csrf" to home.formToken()), cookie)
+        // The host owns navigation/its logout form; this module verifies the session and CSRF boundary.
+        val logout = http.form("$PANEL/logout", mapOf("csrf" to Tokens.hash("locator-form:$jwt")), cookie)
         assertEquals(HttpStatusCode.SeeOther, logout.status)
         assertNull(auth.user(jwt))
     }

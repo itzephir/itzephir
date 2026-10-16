@@ -23,7 +23,8 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 
-fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean = true, panelAuth: PanelAuth? = null) {
+fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean = true, panelAuth: PanelAuth? = null, pageRenderer: LocatorPageRenderer = contentOnlyRenderer) {
+    attributes.put(locatorRenderer, pageRenderer)
     install(ContentNegotiation) { json(Json { encodeDefaults = true }) }
     install(StatusPages) {
         exception<LocatorException> { call, error ->

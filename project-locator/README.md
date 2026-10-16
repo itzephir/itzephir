@@ -85,6 +85,12 @@ use `/resolve/{slug}` without giving the gateway an admin credential.
 
 Paths are identical on production and stage; the hostname selects the stand.
 The pages use server-rendered HTML/CSS and work without JavaScript.
+The website hosts their content inside the shared site shell, with the same
+dark/light themes, webring, visited tabs and responsive header as the portfolio.
+The [UI reference](../website/DESIGN.md#development-workspace-ui-v1) records the
+Figma implementation frames. Administrators open `/dev/panel/new` to create a
+project, then assign owners in its settings. GitHub controls are shown only
+when the provider is configured.
 
 The web panel supports **GitHub OAuth and username/password**. Web users are
 separate from service API credentials. Administrators create password accounts

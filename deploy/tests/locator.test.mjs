@@ -64,6 +64,30 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await admin.getByLabel('Пароль', { exact: true }).fill(password);
         await admin.getByRole('button', { name: 'Войти', exact: true }).click();
         assert.equal(await admin.getByRole('heading', { name: 'Все проекты' }).count(), 1);
+        const routes = ['/', '/projects', '/about', '/dev', '/dev/panel', '/dev/panel/users', '/dev/panel/account', '/dev/panel/new', `/dev/panel/${own.project.id}/edit`];
+        for (const width of [320, 390, 719, 720, 768, 999, 1000, 1440]) {
+            await admin.setViewportSize({ width, height: 1000 });
+            let geometry;
+            for (const theme of ['dark', 'light']) for (const route of routes) {
+                const response = await admin.goto(`${base}${route}?theme=${theme}`);
+                assert.equal(response.status(), 200, route);
+                await admin.evaluate(() => document.fonts.ready);
+                assert.equal(await admin.locator('#portfolio[data-shell-contract="1"]').count(), 1);
+                assert.equal(await admin.locator('.app-header').count(), 1);
+                assert.equal(await admin.locator('main#content').count(), 1);
+                assert.equal(await admin.locator('.workspace-label').textContent(), route);
+                const actual = await admin.locator('.app-header, .logo, .webring, .header-language, .desktop-theme, .header-github').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => {
+                    const r = n.getBoundingClientRect(); return [n.className, ...[r.x, r.y, r.width, r.height].map(v => Math.round(v * 100) / 100)];
+                }));
+                geometry ??= actual;
+                assert.deepEqual(actual, geometry, `Shared shell moved: ${route}, ${width}, ${theme}`);
+                assert.ok(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${route}, ${width}, ${theme}`);
+                const images = await admin.locator('img').evaluateAll(nodes => nodes.filter(n => !n.complete || !n.naturalWidth).map(n => n.src));
+                assert.deepEqual(images, [], route);
+            }
+        }
+        await admin.setViewportSize({ width: 1440, height: 1000 });
+        await admin.goto(panel);
         const jwtCookie = (await adminContext.cookies()).find(cookie => cookie.name === 'itzephir_locator_session');
         assert.ok(jwtCookie.httpOnly); assert.equal(jwtCookie.sameSite, 'Strict'); assert.equal(jwtCookie.value.split('.').length, 3);
         await admin.goto(`${panel}/users`);
@@ -93,6 +117,8 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await owner.screenshot({ path: resolve(output, 'panel-owner-390.png'), fullPage: true });
         const hidden = await owner.goto(`${panel}/${other.project.id}/edit`);
         assert.equal(hidden.status(), 404);
+        assert.equal(await owner.locator('#portfolio[data-shell-contract="1"]').count(), 1);
+        assert.equal((await owner.goto(`${panel}/new`)).status(), 403);
         await owner.goto(`${panel}/${own.project.id}/edit`);
         await owner.getByLabel('Имя проекта', { exact: true }).fill('minor-updated');
         await owner.getByLabel('Slug в адресе', { exact: true }).fill('minor_updated');
@@ -113,6 +139,50 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await owner.getByRole('button', { name: 'Выйти', exact: true }).click();
         assert.equal(await owner.getByLabel('Логин', { exact: true }).count(), 1);
         assert.ok(!(await ownerContext.cookies()).some(cookie => cookie.name === 'itzephir_locator_session'));
+        await admin.goto(`${panel}/new`);
+        await admin.getByLabel('Имя проекта', { exact: true }).fill('ui-created');
+        await admin.getByLabel('Slug в адресе', { exact: true }).fill('ui_created');
+        await admin.getByRole('button', { name: 'Создать проект', exact: true }).click();
+        assert.equal(await admin.getByRole('heading', { name: 'Проект создан', exact: true }).count(), 1);
+        const issuedToken = await admin.locator('pre code').textContent();
+        assert.match(issuedToken, /^itzp_[A-Za-z0-9_-]{43}$/);
+        await admin.getByRole('link', { name: 'К настройкам проекта', exact: true }).click();
+        assert.ok(!(await admin.locator('body').textContent()).includes(issuedToken), 'Token is shown only in creation response');
+        await publicPage.goto(`${base}/dev`);
+        assert.equal(await publicPage.getByText('ui-created', { exact: true }).count(), 1);
+        // HTMX fragments and document restoration retain the same authenticated route and tab.
+        const enhanced = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+        await enhanced.addCookies(await adminContext.cookies());
+        const enhancedPage = await enhanced.newPage();
+        for (const width of [1440, 390]) {
+            await enhancedPage.setViewportSize({ width, height: 1000 });
+            for (const route of ['/dev', '/dev/panel', `/dev/panel/${own.project.id}/edit`, '/dev/panel/users', '/dev/panel/account', '/dev/panel/new']) {
+                await enhancedPage.goto(`${base}${route}?theme=dark`);
+                await enhancedPage.evaluate(() => { window.devDocumentMarker = 'same'; });
+                await enhancedPage.locator('.theme-toggle:visible').click();
+                await enhancedPage.waitForSelector('#portfolio[data-theme="light"]');
+                assert.equal(new URL(enhancedPage.url()).pathname, route);
+                assert.equal(await enhancedPage.evaluate(() => window.devDocumentMarker), 'same');
+                await enhancedPage.goto(`${base}${route}`);
+                await enhancedPage.reload();
+                assert.equal(await enhancedPage.locator('#portfolio').getAttribute('data-theme'), 'light');
+                if (width === 1440) await enhancedPage.screenshot({ path: resolve(output, `dev-light-${route.split('/').at(-1) || 'home'}-1440.png`), fullPage: true });
+            }
+        }
+        await enhancedPage.setViewportSize({ width: 1440, height: 1000 });
+        await enhancedPage.goto(`${base}/dev`);
+        const closeResponse = enhancedPage.waitForResponse(response => response.url().endsWith('/tabs/close') && response.request().method() === 'POST');
+        await enhancedPage.locator('.editor-tab[data-tab="users"] .tab-close').click();
+        const closeResult = await closeResponse;
+        assert.equal(closeResult.status(), 303);
+        assert.equal(new URL(enhancedPage.url()).pathname, '/dev');
+        assert.equal(await enhancedPage.locator('.editor-tab[data-tab="users"]').count(), 0);
+        await enhancedPage.locator('.editor-tab[data-tab="dev"] .tab-close').click();
+        assert.equal(new URL(enhancedPage.url()).pathname, '/about');
+        await enhancedPage.goto(`${base}/dev`);
+        await enhancedPage.reload();
+        assert.equal(await enhancedPage.locator('.editor-tab[data-tab="dev"]').count(), 1);
+        await enhanced.close();
         await ownerContext.close(); await adminContext.close();
     } finally {
         await browser?.close();
