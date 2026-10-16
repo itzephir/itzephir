@@ -21,6 +21,8 @@ self-hosted; font and icon license notices are under `third_party`.
 
 The implementation uses fluid widths and a 720 px breakpoint. The mobile header
 contains the webring only; routes are reached through content links and Back.
+Desktop tabs represent visited pages, preserve their opening order in the
+session, and provide separate close controls. See `README.md` for tab behavior.
 The profile route adapts the existing biography to the same style because the
 baseline includes a profile shortcut but no separate profile screen.
 
