@@ -91,8 +91,7 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
     header("app-header") {
         a("/", classes = "brand") {
             attributes["aria-label"] = "itzephir — главная"
-            span("logo") { img(src = asset("design/${theme.value}/logo.svg"), alt = "", classes = "logo-artwork") { width = "64"; height = "64" } }
-            span("brand-name") { +"itzephir" }
+            span("logo") { img(src = asset("design/${theme.value}/wordmark.svg"), alt = "", classes = "logo-artwork") }
             span("mono muted workspace-label") { +"/ workspace" }
         }
         div("header-actions") {

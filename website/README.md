@@ -29,10 +29,12 @@ Plex Sans/Mono fonts, and HTMX live in
 caches after updates; assets are cached for an hour.
 
 The implementation follows the approved [Figma baseline](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=14-3481):
-dark/light colors, desktop editor tabs, mobile content navigation, and logo 06
-(Full connection, Soft corners). The desktop mark renders at 28 px; the original
-64 px SVGs and transparent 16/32 px favicons are exported from Figma. Favicon
-variants follow browser color scheme so they stay visible in light/dark tabs.
+dark/light colors, desktop editor tabs, mobile content navigation, and the
+whole-name logo: connected `itz` + `ephir` in Quicksand Bold. The complete SVG
+exports retain the outlined letters and optical spacing, and render in a
+32 px-high desktop slot. The short `itz` SVG and transparent 16/32 px favicon
+exports remain unchanged. Favicon variants follow browser color scheme so they
+stay visible in light/dark tabs.
 
 The theme link requests the current path with `?theme=light` or `?theme=dark`. A normal request gets a
 complete HTML document. An `HX-Request: true` request gets just `#portfolio`, which
