@@ -36,6 +36,10 @@ exports retain the outlined letters and optical spacing, and render in a
 exports remain unchanged. Favicon variants follow browser color scheme so they
 stay visible in light/dark tabs.
 
+Use [figma-cli](FIGMA.md) as the primary tool for inspecting and editing Figma,
+exporting assets, and checking design changes. [DESIGN.md](DESIGN.md) records the
+approved source screens and branding.
+
 The theme link requests the current path with `?theme=light` or `?theme=dark`. A normal request gets a
 complete HTML document. An `HX-Request: true` request gets just `#portfolio`, which
 HTMX replaces without reloading the document or jumping to the top. The theme
