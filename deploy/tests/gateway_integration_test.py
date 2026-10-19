@@ -30,10 +30,10 @@ def free_port():
 
 class GatewayIntegrationTest(unittest.TestCase):
     def test_proxy_redirect_legacy_dns_tls_and_websocket(self):
+        if os.getenv("PROJECT_ROUTING_REQUIRE_NGINX_TESTS") != "true":
+            self.skipTest("run in the dedicated nginx container; runner nginx may predate http2 on")
         if not shutil.which("nginx"):
-            if os.getenv("PROJECT_ROUTING_REQUIRE_NGINX_TESTS") == "true":
-                self.fail("nginx is required for gateway integration tests")
-            self.skipTest("nginx unavailable; CI runs this test in an isolated nginx container")
+            self.fail("nginx is required for gateway integration tests")
         temporary = tempfile.TemporaryDirectory()
         self.addCleanup(temporary.cleanup)
         root = Path(temporary.name)
