@@ -73,6 +73,9 @@ jobs:
           cp deploy/activate-release.sh website/build/install/website/deploy/
           touch website/build/install/website/deploy/require-locator
           cp -R deploy/nginx website/build/install/website/nginx
+          if [[ "${{ vars.PROJECT_ROUTING_ENABLED }}" == "true" ]]; then
+            touch website/build/install/website/nginx/enable-project-routing
+          fi
 
       - name: Check infrastructure provisioning, nginx and rollback
         run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
@@ -81,6 +84,11 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
             'apk add --no-cache nginx python3 openjdk21-jre-headless >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_BADGE_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p project_badge_integration_test.py'
+
+      - name: Check project gateway with real nginx, TLS, DNS and WebSockets
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
+            'apk add --no-cache nginx python3 openssl >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_ROUTING_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p gateway_integration_test.py'
 
       - name: Check shell ownership, navigation and responsive contract in Chrome
         env:

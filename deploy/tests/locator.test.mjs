@@ -142,12 +142,16 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await admin.goto(`${panel}/new`);
         await admin.getByLabel('Имя проекта', { exact: true }).fill('ui-created');
         await admin.getByLabel('Slug в адресе', { exact: true }).fill('ui_created');
+        await admin.getByLabel('Способ публикации', { exact: true }).selectOption('redirect');
+        await admin.getByLabel('Адрес назначения', { exact: true }).fill('https://example.org/ui-created');
         await admin.getByRole('button', { name: 'Создать проект', exact: true }).click();
         assert.equal(await admin.getByRole('heading', { name: 'Проект создан', exact: true }).count(), 1);
         const issuedToken = await admin.locator('pre code').textContent();
         assert.match(issuedToken, /^itzp_[A-Za-z0-9_-]{43}$/);
         await admin.getByRole('link', { name: 'К настройкам проекта', exact: true }).click();
         assert.ok(!(await admin.locator('body').textContent()).includes(issuedToken), 'Token is shown only in creation response');
+        assert.equal(await admin.getByLabel('Способ публикации', { exact: true }).inputValue(), 'redirect');
+        assert.equal(await admin.getByLabel('Адрес назначения', { exact: true }).inputValue(), 'https://example.org/ui-created');
         await publicPage.goto(`${base}/dev`);
         assert.equal(await publicPage.getByText('ui-created', { exact: true }).count(), 1);
         // HTMX fragments and document restoration retain the same authenticated route and tab.
