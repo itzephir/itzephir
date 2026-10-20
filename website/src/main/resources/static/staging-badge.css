@@ -1,4 +1,12 @@
+@font-face {
+  font-family: "IBM Plex Sans";
+  src: url("fonts/ibm-plex-sans.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 700;
+  font-display: swap;
+}
 #staging-badge {
+  all: initial;
   --badge-panel: #23262a;
   --badge-text: #eef0f2;
   --badge-line: #383d43;
@@ -23,6 +31,7 @@
   color: var(--badge-text);
   box-shadow: 0 4px 16px #00000014;
   font: 400 13px/20px "IBM Plex Sans", sans-serif;
+  text-align: left;
 }
 body:has([data-theme="light"]) #staging-badge {
   --badge-panel: #fff;
@@ -31,6 +40,20 @@ body:has([data-theme="light"]) #staging-badge {
   --badge-muted: #5e6b79;
   --badge-hover: #e8ecf0;
   --badge-status: #926619;
+}
+@media (prefers-color-scheme: light) {
+  body:not(:has([data-theme="dark"])) #staging-badge {
+    --badge-panel: #fff;
+    --badge-text: #252b32;
+    --badge-line: #d4dae0;
+    --badge-muted: #5e6b79;
+    --badge-hover: #e8ecf0;
+    --badge-status: #926619;
+  }
+}
+#staging-badge > span, #staging-badge .staging-badge-close, #staging-badge .staging-badge-close > span {
+  all: unset;
+  box-sizing: border-box;
 }
 #staging-badge .staging-badge-dot {
   flex: 0 0 6px;
@@ -48,6 +71,7 @@ body:has([data-theme="light"]) #staging-badge {
   color: var(--badge-muted);
   font: 400 24px/1 "IBM Plex Sans", sans-serif;
   text-decoration: none;
+  cursor: pointer;
 }
 #staging-badge .staging-badge-close:hover { background: var(--badge-hover); color: var(--badge-text); }
 #staging-badge .staging-badge-close:focus-visible { outline: 2px solid var(--badge-status); outline-offset: -2px; }

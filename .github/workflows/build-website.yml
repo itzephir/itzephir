@@ -77,6 +77,11 @@ jobs:
       - name: Check infrastructure provisioning, nginx and rollback
         run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
 
+      - name: Check project badge through real public nginx and project gateway
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
+            'apk add --no-cache nginx python3 openjdk21-jre-headless >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_BADGE_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p project_badge_integration_test.py'
+
       - name: Check shell ownership, navigation and responsive contract in Chrome
         env:
           BROWSER_OUTPUT: ${{ github.workspace }}/screenshots

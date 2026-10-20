@@ -24,6 +24,7 @@ dependencies {
     implementation(project(":project-locator"))
     implementation("io.ktor:ktor-server-cio:$ktorVersion")
     implementation("io.ktor:ktor-server-html-builder:$ktorVersion")
+    implementation("io.ktor:ktor-client-cio:$ktorVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-html-jvm:0.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     runtimeOnly("org.slf4j:slf4j-simple:2.0.17")
