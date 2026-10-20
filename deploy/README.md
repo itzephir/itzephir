@@ -17,6 +17,13 @@ theme persistence, and JavaScript-off navigation; screenshots are also uploaded.
 GitHub Actions deploys the PR merge commit to the shared development preview.
 Merging triggers production. The last completed PR deployment wins; deployment
 jobs are serialized per environment and a running deployment is never cancelled.
+
+Before starting a candidate, `activate-release.sh` records its validated target
+in `deploy/environment` inside that release. The website uses this marker to
+install the staging HTML badge only for `dev`; `prod` bypasses the interceptor
+regardless of query parameters or request host. The marker travels with the
+release during rollback and needs no manual service configuration. Local badge
+testing and query behavior are documented in `../website/README.md`.
 Closing a PR leaves the last preview available.
 
 Fork/Dependabot PRs and manual runs are build/test only. The workflow uses

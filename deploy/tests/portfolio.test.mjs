@@ -58,7 +58,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
     const screenshots = resolve(process.env.BROWSER_OUTPUT ?? resolve(root, 'website/build/browser-check'));
     await mkdir(screenshots, { recursive: true });
     const server = spawn('bash', [resolve(distribution, 'bin/website')], {
-        env: { ...process.env, PORT: port, BIND_HOST: '127.0.0.1', COOKIE_SECURE: 'false' },
+        env: { ...process.env, PORT: port, BIND_HOST: '127.0.0.1', COOKIE_SECURE: 'false', DEPLOYMENT_ENV: 'dev' },
         stdio: ['ignore', 'pipe', 'pipe'],
     });
     let serverLog = '';
@@ -77,6 +77,37 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         browser = await chromium.launch({ executablePath: process.env.CHROME_EXECUTABLE, headless: true, args: ['--no-sandbox'] });
         const context = await browser.newContext();
         const page = await context.newPage();
+        for (const width of [1440, 320]) {
+            await page.setViewportSize({ width, height: 972 });
+            for (const theme of ['dark', 'light']) {
+                await page.goto(`${base}/about?theme=${theme}&show_badge=1&tag=a&tag=b`, { waitUntil: 'networkidle' });
+                const badge = page.locator('#staging-badge');
+                assert.equal(await badge.count(), 1);
+                assert.ok(await badge.isVisible());
+                const box = await badge.boundingBox();
+                assert.ok(box.x >= 0 && box.x + box.width <= width && box.y + box.height <= 972);
+                const close = page.locator('.staging-badge-close');
+                const target = await close.boundingBox();
+                assert.equal(target.width, 44); assert.equal(target.height, 44);
+                await badge.screenshot({ path: resolve(screenshots, `staging-badge-${theme}-${width}.png`) });
+                const surface = await badge.evaluate(element => getComputedStyle(element).backgroundColor);
+                await page.locator('.theme-toggle:visible').click();
+                await page.waitForSelector(`#portfolio[data-theme="${theme === 'dark' ? 'light' : 'dark'}"]`);
+                assert.equal(await badge.count(), 1);
+                assert.notEqual(await badge.evaluate(element => getComputedStyle(element).backgroundColor), surface);
+                await close.click();
+                await page.waitForURL(url => url.searchParams.get('show_badge') === '0');
+                assert.equal(await page.locator('#portfolio').getAttribute('data-theme'), theme === 'dark' ? 'light' : 'dark');
+                assert.equal(new URL(page.url()).pathname, '/about');
+                // Closing preserves the parameters of the document that supplied the badge.
+                assert.deepEqual(new URL(page.url()).searchParams.getAll('tag'), ['a', 'b']);
+                assert.equal(await badge.count(), 0);
+                await page.reload();
+                assert.equal(await badge.count(), 0);
+                await page.goto(`${base}/about`, { waitUntil: 'networkidle' });
+                assert.ok(await badge.isVisible());
+            }
+        }
         const errors = [], failedResponses = [], requests = [];
         page.on('pageerror', error => errors.push(error.message));
         page.on('response', response => { if (response.status() >= 400) failedResponses.push(response.url()); });
@@ -237,6 +268,11 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
 
         const noJs = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 844 } });
         const plain = await noJs.newPage();
+        await plain.goto(base);
+        assert.ok(await plain.locator('#staging-badge').isVisible());
+        await plain.locator('.staging-badge-close').click();
+        assert.equal(new URL(plain.url()).searchParams.get('show_badge'), '0');
+        assert.equal(await plain.locator('#staging-badge').count(), 0);
         await plain.goto(base);
         assert.equal(await plain.locator('.webring a:visible').count(), 3);
         await plain.locator('.theme-toggle:visible').click();

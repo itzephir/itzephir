@@ -53,6 +53,9 @@ rollback() {
     exit 1
 }
 
+# Keep environment selection in the versioned release, including on existing VMs.
+mkdir -p "$candidate/deploy"
+printf '%s\n' "$target" > "$candidate/deploy/environment"
 activate "$candidate"
 sudo -n /usr/bin/systemctl restart "$service" || rollback
 
