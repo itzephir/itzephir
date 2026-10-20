@@ -194,9 +194,10 @@ http {{
         self.assertEqual(request("/")[2].count(b'id="staging-badge"'), 1)
         self.assertEqual(request(prefix, headers={"HX-Request": "true"})[2], html)
         self.assertEqual(request(prefix, headers={"HX-Request": "true", "HX-History-Restore-Request": "true"})[2].count(b'id="staging-badge"'), 1)
-        self.assertEqual(request(prefix, headers={"If-None-Match": '"project-v1"'})[0], 200)
+        self.assertEqual(request(prefix, headers={"If-None-Match": '"project-v1"'})[0], 304)
         self.assertEqual(request(prefix + "?show_badge=0", headers={"If-None-Match": '"project-v1"'})[0], 304)
         self.assertEqual(request(prefix + "?show_badge=1", prod=True, headers={"If-None-Match": '"project-v1"'})[0], 304)
+        self.assertEqual(request(prefix + "api", headers={"If-None-Match": '"project-v1"'})[0], 304)
         self.assertEqual(request(prefix, headers={"Upgrade": "websocket"})[2], html)
         self.assertEqual(requests[-1][1], "gzip")
 

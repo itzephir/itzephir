@@ -70,9 +70,7 @@ internal fun Application.stagingProjectGateway(gatewayUrl: String = "http://127.
                             if (name.lowercase() !in requestHopHeaders &&
                                 !name.equals(HttpHeaders.ContentLength, true) &&
                                 !name.equals(HttpHeaders.ContentType, true) &&
-                                !name.equals(HttpHeaders.AcceptEncoding, true) &&
-                                (!decorate || !name.equals(HttpHeaders.IfNoneMatch, true)) &&
-                                (!decorate || !name.equals(HttpHeaders.IfModifiedSince, true))
+                                !name.equals(HttpHeaders.AcceptEncoding, true)
                             ) headers.appendAll(name, values)
                         }
                         // Both gateway hops forward this: project compression cannot hide HTML.

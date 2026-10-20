@@ -2,6 +2,7 @@ package com.itzephir.website
 
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.ParametersBuilder
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.content.TextContent
@@ -10,6 +11,7 @@ import io.ktor.http.formUrlEncode
 import io.ktor.server.application.createApplicationPlugin
 import io.ktor.server.application.hooks.ResponseBodyReadyForSend
 import io.ktor.server.request.path
+import io.ktor.server.request.httpMethod
 import io.ktor.utils.io.ByteChannel
 import io.ktor.utils.io.readBuffer
 import kotlinx.coroutines.coroutineScope
@@ -37,13 +39,13 @@ internal fun isStagingDeployment(
 /** Decorates complete HTML documents; fragments, APIs and production bypass the plugin. */
 internal val StagingBadge = createApplicationPlugin("StagingBadge") {
     on(ResponseBodyReadyForSend) { call, body ->
-        if (call.request.queryParameters["show_badge"] == "0" ||
+        if (call.request.httpMethod == HttpMethod.Head || call.request.queryParameters["show_badge"] == "0" ||
             (call.request.headers["HX-Request"] == "true" &&
                 call.request.headers["HX-History-Restore-Request"] != "true") ||
             body.contentType?.match(ContentType.Text.Html) != true
         ) return@on
         // Leave downloads, encoded bodies and manually validated responses untouched.
-        if (listOf(HttpHeaders.ContentDisposition, HttpHeaders.ContentLength, HttpHeaders.ContentEncoding,
+        if (listOf(HttpHeaders.ContentDisposition, HttpHeaders.ContentLength, HttpHeaders.ContentEncoding, HttpHeaders.ContentRange,
                 HttpHeaders.ETag, HttpHeaders.LastModified)
                 .any { call.response.headers[it] != null || body.headers[it] != null }) return@on
         val charset = body.contentType?.charset() ?: Charsets.UTF_8

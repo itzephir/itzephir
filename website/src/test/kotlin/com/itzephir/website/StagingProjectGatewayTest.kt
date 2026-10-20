@@ -47,8 +47,12 @@ class StagingProjectGatewayTest {
                 path.endsWith("/file") || path.endsWith("/upload") -> "application/octet-stream"
                 else -> "text/html; charset=utf-8"
             }
+            if (path.endsWith("/range")) {
+                status = 206
+                exchange.responseHeaders.add(HttpHeaders.ContentRange, "bytes 0-${payload.size - 1}/${payload.size}")
+            }
             exchange.responseHeaders.add(HttpHeaders.ContentType, type)
-            exchange.responseHeaders.add(HttpHeaders.ETag, "\"project-v1\"")
+            if (!path.endsWith("/range")) exchange.responseHeaders.add(HttpHeaders.ETag, "\"project-v1\"")
             exchange.responseHeaders.add(HttpHeaders.CacheControl, "public, max-age=3600")
             exchange.responseHeaders.add(HttpHeaders.SetCookie, "project=a; Path=/dev/project/example/; HttpOnly")
             exchange.responseHeaders.add(HttpHeaders.SetCookie, "other=b; Path=/dev/project/example/")
@@ -75,7 +79,6 @@ class StagingProjectGatewayTest {
             val response = client.get("$stagingProjectPrefix/example/docs$query") {
                 header(HttpHeaders.AcceptEncoding, "gzip, br")
                 header(HttpHeaders.Cookie, "project=a")
-                header(HttpHeaders.IfNoneMatch, "\"project-v1\"")
             }
             assertEquals(HttpStatusCode.OK, response.status)
             val doc = Jsoup.parse(response.bodyAsText())
@@ -89,7 +92,6 @@ class StagingProjectGatewayTest {
             assertEquals("/dev/project/example/docs$query", request[1])
             assertEquals("identity", request[2])
             assertEquals("project=a", request[3])
-            assertEquals("", request[5])
         }
         val hidden = client.get("$stagingProjectPrefix/example/docs?show_badge=0")
         assertEquals(html, hidden.bodyAsText())
@@ -104,15 +106,26 @@ class StagingProjectGatewayTest {
         assertContentEquals(binary, client.get("$stagingProjectPrefix/example/file").bodyAsBytes())
         val uploaded = client.post("$stagingProjectPrefix/example/upload?q=a%2Fb") { setBody(binary) }
         assertContentEquals(binary, uploaded.bodyAsBytes())
+        val conditional = client.post("$stagingProjectPrefix/example/upload") {
+            header(HttpHeaders.IfNoneMatch, "*")
+            header(HttpHeaders.IfModifiedSince, "Tue, 20 Oct 2026 10:00:00 GMT")
+            setBody(binary)
+        }
+        assertContentEquals(binary, conditional.bodyAsBytes())
+        assertEquals("*", requests.last()[5], "Write preconditions must reach the project unchanged")
         val download = client.get("$stagingProjectPrefix/example/download")
         assertEquals(html, download.bodyAsText())
         assertTrue(download.headers[HttpHeaders.ContentDisposition]!!.startsWith("attachment"))
         assertEquals("<main>partial</main>", client.get("$stagingProjectPrefix/example/fragment").bodyAsText())
+        val range = client.get("$stagingProjectPrefix/example/range")
+        assertEquals(HttpStatusCode.PartialContent, range.status)
+        assertEquals(html, range.bodyAsText())
         val redirect = createClient { followRedirects = false }.get("$stagingProjectPrefix/example/redirect")
         assertEquals(HttpStatusCode.PermanentRedirect, redirect.status)
         assertEquals("/dev/project/example/?next=1", redirect.headers[HttpHeaders.Location])
         val head = client.head("$stagingProjectPrefix/example/")
         assertEquals(HttpStatusCode.OK, head.status)
+        assertEquals(html.toByteArray().size.toString(), head.headers[HttpHeaders.ContentLength])
         assertContentEquals(byteArrayOf(), head.bodyAsBytes())
     }
 

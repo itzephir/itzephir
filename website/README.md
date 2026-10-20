@@ -56,9 +56,10 @@ endpoint. Upgrade requests retain the existing nginx gateway path.
 
 The proxy requests identity encoding from projects, streams non-HTML responses
 and request bodies, and preserves statuses, cookies and redirects. For HTML
-being decorated it removes upstream cache validators and uses `no-store`, so an
-old cached project document cannot hide the badge. `show_badge=0` retains the
-upstream cache policy and conditional responses. Partial/download responses
+being decorated it removes response cache validators and uses `no-store` to
+prevent caching new badge variants. Request preconditions are always forwarded;
+304 responses remain unchanged. `show_badge=0` retains the upstream cache policy.
+Partial/download responses
 are passed through. Absolute redirects containing nginx's private listener port
 are converted to the corresponding public path. Badge styles are isolated from
 project styles and include their own self-hosted font; projects without a
