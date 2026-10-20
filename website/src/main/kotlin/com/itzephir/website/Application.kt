@@ -44,7 +44,10 @@ fun Application.module(
     panelAuth: PanelAuth? = null,
     stagingBadge: Boolean = isStagingDeployment(),
 ) {
-    if (stagingBadge) install(StagingBadge)
+    if (stagingBadge) {
+        install(StagingBadge)
+        stagingProjectGateway()
+    }
     if (locator != null) projectLocator(locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames))
     routing {
         get("/healthz") {

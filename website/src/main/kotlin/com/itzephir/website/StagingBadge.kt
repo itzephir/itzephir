@@ -61,7 +61,11 @@ internal val StagingBadge = createApplicationPlugin("StagingBadge") {
         }
         val bodyEnd = html.lastIndexOf("</body>", ignoreCase = true)
         val headEnd = html.lastIndexOf("</head>", ignoreCase = true)
-        if (headEnd < 0 || bodyEnd < headEnd || html.contains("id=\"staging-badge\"")) return@on
+        if (headEnd < 0 || bodyEnd < headEnd || html.contains("id=\"staging-badge\"")) {
+            // A proxied writer is a one-shot stream, so replay the bytes we already read.
+            transformBodyTo(body.withBytes(html.toByteArray(charset)))
+            return@on
+        }
 
         val query = ParametersBuilder().apply {
             appendAll(call.request.queryParameters)
@@ -72,7 +76,8 @@ internal val StagingBadge = createApplicationPlugin("StagingBadge") {
             attributes["aria-label"] = "Окружение"
             span("staging-badge-dot") { attributes["aria-hidden"] = "true" }
             span { +"Вы на тестовом стенде" }
-            a("${call.request.path()}?$query", classes = "staging-badge-close") {
+            val path = call.attributes.getOrNull(originalProjectUri)?.substringBefore('?') ?: call.request.path()
+            a("$path?$query", classes = "staging-badge-close") {
                 attributes["aria-label"] = "Скрыть уведомление о тестовом стенде"
                 title = "Скрыть уведомление"
                 span { attributes["aria-hidden"] = "true"; +"×" }
@@ -90,12 +95,14 @@ internal val StagingBadge = createApplicationPlugin("StagingBadge") {
         if (call.response.headers[HttpHeaders.CacheControl] == null) {
             call.response.headers.append(HttpHeaders.CacheControl, "no-store")
         }
-        transformBodyTo(object : OutgoingContent.ByteArrayContent() {
-            override val contentType = body.contentType
-            override val status = body.status
-            override val headers = body.headers
-            override val contentLength = bytes.size.toLong()
-            override fun bytes() = bytes
-        })
+        transformBodyTo(body.withBytes(bytes))
     }
+}
+
+private fun OutgoingContent.withBytes(bytes: ByteArray): OutgoingContent = object : OutgoingContent.ByteArrayContent() {
+    override val contentType = this@withBytes.contentType
+    override val status = this@withBytes.status
+    override val headers = this@withBytes.headers
+    override val contentLength = bytes.size.toLong()
+    override fun bytes() = bytes
 }
