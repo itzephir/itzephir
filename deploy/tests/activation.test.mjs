@@ -11,9 +11,9 @@ const run = promisify(execFile);
 const script = fileURLToPath(new URL('../activate-release.sh', import.meta.url));
 const release = 'abcdef123456-1-1';
 
-async function fixture(staticPrevious = false) {
+async function fixture(staticPrevious = false, target = 'dev') {
     const root = await realpath(await mkdtemp(join(tmpdir(), 'itzephir-activation-')));
-    const base = join(root, 'dev');
+    const base = join(root, target);
     const previous = join(base, 'releases', 'old');
     const candidate = join(base, 'releases', release);
     const bin = join(root, 'mock-bin');
@@ -21,7 +21,7 @@ async function fixture(staticPrevious = false) {
     await mkdir(join(candidate, 'lib'), { recursive: true });
     await writeFile(join(candidate, 'lib', 'website.jar'), 'candidate');
     await mkdir(join(candidate, 'nginx'));
-    await writeFile(join(candidate, 'nginx', 'dev.conf'), 'candidate nginx');
+    await writeFile(join(candidate, 'nginx', `${target}.conf`), 'candidate nginx');
     await mkdir(join(previous, 'lib'), { recursive: true });
     await writeFile(join(previous, staticPrevious ? 'index.html' : 'lib/website.jar'), 'previous');
     await symlink(previous, join(base, 'current'));
@@ -37,10 +37,20 @@ test('healthy deployment activates the candidate and restarts only its environme
     try {
         await run('bash', [script, 'dev', release], { env: f.env });
         assert.equal(await readlink(join(f.base, 'current')), f.candidate);
+        assert.equal(await readFile(join(f.candidate, 'deploy/environment'), 'utf8'), 'dev\n');
         assert.deepEqual((await readFile(f.env.ACTIVATION_LOG, 'utf8')).trim().split('\n'), [
             '/usr/bin/systemctl restart itzephir@dev.service',
             `/usr/local/sbin/itzephir-apply-nginx dev ${release}`,
         ]);
+    } finally { await rm(f.root, { recursive: true, force: true }); }
+});
+
+test('production release records prod before starting the application', async () => {
+    const f = await fixture(false, 'prod');
+    try {
+        await run('bash', [script, 'prod', release], { env: f.env });
+        assert.equal(await readFile(join(f.candidate, 'deploy/environment'), 'utf8'), 'prod\n');
+        assert.equal(await readlink(join(f.base, 'current')), f.candidate);
     } finally { await rm(f.root, { recursive: true, force: true }); }
 });
 
