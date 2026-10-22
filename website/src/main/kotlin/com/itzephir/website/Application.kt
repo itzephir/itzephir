@@ -13,6 +13,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.call
+import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.embeddedServer
 import io.ktor.server.html.respondHtml
@@ -41,7 +42,12 @@ fun Application.module(
     neighborNames: () -> WebringNeighbors = WebringDirectory()::neighbors,
     locator: PostgresLocator? = null,
     panelAuth: PanelAuth? = null,
+    stagingBadge: Boolean = isStagingDeployment(),
 ) {
+    if (stagingBadge) {
+        install(StagingBadge)
+        stagingProjectGateway()
+    }
     if (locator != null) projectLocator(locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames))
     routing {
         get("/healthz") {
