@@ -58,6 +58,10 @@ internal val StagingBadge = createApplicationPlugin("StagingBadge") {
                 }
                 channel.readBuffer().readByteArray().toString(charset)
             }
+            is OutgoingContent.ReadChannelContent -> {
+                val channel = body.readFrom()
+                try { channel.readBuffer().readByteArray().toString(charset) } finally { channel.cancel(null) }
+            }
             is OutgoingContent.ByteArrayContent -> body.bytes().toString(charset)
             else -> return@on
         }
