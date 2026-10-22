@@ -19,6 +19,51 @@ Open http://127.0.0.1:8080. Optional environment variables:
 | `PORT` | `8080` | HTTP listening port |
 | `BIND_HOST` | `127.0.0.1` | Listening address |
 | `COOKIE_SECURE` | `false` | Use `true` behind HTTPS in deployment |
+| `DEPLOYMENT_ENV` | production behavior | Set `dev` to test the staging badge locally; the release target takes precedence |
+
+## Staging badge
+
+`StagingBadge.kt` is an application-wide Ktor response interceptor, installed only
+for stage. It adds a fixed bottom-right “Вы на тестовом стенде” badge to complete
+dynamic HTML documents, including the locator UI and proxied project pages under
+`/dev/project/<slug>/`. APIs, assets, downloads,
+encoded/validated bodies and HTMX fragments pass through unchanged. Full HTMX
+history restoration receives one badge. The badge is outside `#portfolio`, so
+theme swaps do not duplicate it or alter shared header geometry.
+
+- No `show_badge` query parameter, or `show_badge=1`: show the badge.
+- `show_badge=0`: omit the badge and its CSS/JavaScript references.
+- Production: ignore the query parameter; the interceptor is not installed.
+
+The close control sets `show_badge=0` in the current URL while preserving other
+parameters, the current document and HTMX history state. With JavaScript disabled
+it follows a normal server-rendered link. Hiding applies to that URL; a new URL
+without the parameter shows the badge again. Both site themes, a 44 px close
+target, keyboard focus, mobile safe areas and print hiding are supported.
+
+The committed activation script writes `dev` or `prod` to the candidate release's
+`deploy/environment` before starting it. The application trusts this local file,
+not the request hostname or query. Existing VMs need no manual systemd changes.
+An absent marker defaults to production behavior; `DEPLOYMENT_ENV=dev` is the
+local development override. See the [Figma component](DESIGN.md#staging-badge-v1).
+
+The stage public nginx sends ordinary `/dev/project/` requests to the internal
+`/__staging-project/` location. `StagingProjectGateway.kt` forwards their original
+URI to the existing, fixed loopback gateway on port 18101, and the same badge
+plugin processes its HTML response. Direct public access to the internal
+location returns 404. Production has neither this nginx rewrite nor this Ktor
+endpoint. Upgrade requests retain the existing nginx gateway path.
+
+The proxy requests identity encoding from projects, streams non-HTML responses
+and request bodies, and preserves statuses, cookies and redirects. For HTML
+being decorated it removes response cache validators and uses `no-store` to
+prevent caching new badge variants. Request preconditions are always forwarded;
+304 responses remain unchanged. `show_badge=0` retains the upstream cache policy.
+Partial/download responses
+are passed through. Absolute redirects containing nginx's private listener port
+are converted to the corresponding public path. Badge styles are isolated from
+project styles and include their own self-hosted font; projects without a
+`data-theme` use the browser's preferred color scheme.
 
 ## Rendering and theme
 

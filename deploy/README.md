@@ -17,6 +17,13 @@ theme persistence, and JavaScript-off navigation; screenshots are also uploaded.
 GitHub Actions deploys the PR merge commit to the shared development preview.
 Merging triggers production. The last completed PR deployment wins; deployment
 jobs are serialized per environment and a running deployment is never cancelled.
+
+Before starting a candidate, `activate-release.sh` records its validated target
+in `deploy/environment` inside that release. The website uses this marker to
+install the staging HTML badge only for `dev`; `prod` bypasses the interceptor
+regardless of query parameters or request host. The marker travels with the
+release during rollback and needs no manual service configuration. Local badge
+testing and query behavior are documented in `../website/README.md`.
 Closing a PR leaves the last preview available.
 
 Fork/Dependabot PRs and manual runs are build/test only. The workflow uses
@@ -147,3 +154,32 @@ removes the obsolete `/project/` namespace. Shared nginx and root helper updates
 must run through committed infrastructure CI, including the initial installation.
 The minor-web bootstrap workflow installs these files from the pinned commit;
 normal application CI publishes only its own environment's route.
+
+## Stage badge on project pages
+
+`dev.conf` adds a shared interception step before the existing stage project
+gateway: public `/dev/project/<slug>/...` requests are rewritten internally to
+`/__staging-project/...` and sent to the stage Ktor service. That endpoint proxies
+the original path/query to `127.0.0.1:18101`, preserving the project deployer's
+route snippets, redirects and cookies. Complete HTML receives the same badge as
+the portfolio. Other response types and downloads stream through; HTTP upgrade
+requests keep their previous direct gateway route. The internal nginx location
+rejects direct external requests.
+
+The rewrite is present only in the stage release template, so normal PR CI
+publishes it with the existing validated nginx publisher and rollback. No root
+helper upgrade, manual VM edit or project repository change is needed.
+`prod.conf` has no interception route, and the production application installs
+no proxy endpoint. Query parameters cannot enable interception on production.
+
+CI checks the real chain (public nginx → Ktor → project gateway → project app)
+in an isolated container, including compressed requests/responses, query values,
+cache validators, redirects, cookies, downloads and production isolation:
+
+```sh
+docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
+  'apk add --no-cache nginx python3 openjdk21-jre-headless >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_BADGE_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p project_badge_integration_test.py'
+```
+
+Build `:website:installDist` first. Ordinary Python test discovery skips this
+container-only test; the explicit CI step requires it to run.

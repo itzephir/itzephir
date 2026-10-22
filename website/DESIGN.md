@@ -2,6 +2,26 @@
 
 Source: [01 · Baseline in Figma](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=14-3481).
 
+## Staging badge v1
+
+The [review sheet](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=101-6652)
+shows instances of component set `101:6651`, `Environment / Staging badge`, in
+Dark/Light × Default/Hover variants. The 252 × 52 px overlay uses Workspace
+panel/text/line/muted/raised variables, IBM Plex Sans 13/20, 12 px corners, a
+subtle shadow and a 6 px amber status marker. Status tokens `badge-status`
+are `#e1b96a` in dark and `#926619` in light. The cross has a 44 × 44 px target
+and a visible keyboard focus outline.
+
+Placement is fixed at bottom right: 16 px desktop insets, 12 px below 720 px,
+respecting safe areas. The same component fits a 320 px viewport without
+shrinking its controls. It sits outside the shared site shell and does not
+change the header contract. `staging-badge.css` owns its isolated selectors.
+The marker is paired with the explicit “Вы на тестовом стенде” label; the badge
+is hidden in print. See [runtime behavior](README.md#staging-badge) for query
+parameters, close behavior and environment isolation.
+
+## Portfolio screens
+
 | Screen | Dark | Light |
 | --- | --- | --- |
 | Welcome desktop | `14:1898` | `14:2009` |
