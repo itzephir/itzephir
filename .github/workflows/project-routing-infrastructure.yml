@@ -1,0 +1,47 @@
+name: Prepare project routing infrastructure
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Environment with DNS and wildcard certificate already configured
+        type: choice
+        required: true
+        options: [dev, prod]
+
+permissions:
+  contents: read
+
+jobs:
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: infrastructure
+    concurrency:
+      group: itzephir-project-routing-infrastructure
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Prepare DNS bridge and restricted nginx publisher from this commit
+        env:
+          INFRA_SSH_KEY: ${{ secrets.INFRA_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+          TARGET: ${{ inputs.target }}
+        run: |
+          set -euo pipefail
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+          printf '%s\n' "$INFRA_SSH_KEY" > "$work/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
+          chmod 600 "$work/key" "$work/known_hosts"
+          tar -czf "$work/routing.tar.gz" deploy/setup-project-routing.sh deploy/apply-nginx.py
+          remote="/tmp/itzephir-routing-$GITHUB_SHA-$GITHUB_RUN_ID"
+          ssh_args=(-i "$work/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2)
+          ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
+          scp "${ssh_args[@]}" "$work/routing.tar.gz" "root@$DEPLOY_HOST:$remote/routing.tar.gz"
+          ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" \
+            "tar -xzf '$remote/routing.tar.gz' -C '$remote' && bash '$remote/deploy/setup-project-routing.sh' '$TARGET'"

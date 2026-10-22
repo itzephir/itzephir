@@ -23,7 +23,7 @@ import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import kotlinx.serialization.json.Json
 
-fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean = true, panelAuth: PanelAuth? = null, pageRenderer: LocatorPageRenderer = contentOnlyRenderer) {
+fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean = true, panelAuth: PanelAuth? = null, pageRenderer: LocatorPageRenderer = contentOnlyRenderer, projectRoutingEnabled: Boolean = false) {
     attributes.put(locatorRenderer, pageRenderer)
     install(ContentNegotiation) { json(Json { encodeDefaults = true }) }
     install(StatusPages) {
@@ -45,7 +45,7 @@ fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean 
             call.respond(HttpStatusCode.BadRequest, ApiError("invalid_request", "Expected a valid JSON request"))
         }
     }
-    locatorPanel(locator, secureCookies, panelAuth)
+    locatorPanel(locator, secureCookies, panelAuth, projectRoutingEnabled)
     routing {
         route("/api/project-locator/v1") {
             install(createRouteScopedPlugin("LocatorResponseHeaders") {
@@ -99,6 +99,9 @@ fun Application.projectLocator(locator: PostgresLocator, secureCookies: Boolean 
                 val project = locator.resolve(call.parameters["slug"]!!)
                     ?: throw LocatorException(404, "project_not_found", "Approved project not found")
                 call.respond(ResolvedProject(project, project.productionUrl, project.stageUrl))
+            }
+            get("/gateway/{slug}") {
+                call.gateway(locator.resolve(call.parameters["slug"]!!))
             }
         }
     }

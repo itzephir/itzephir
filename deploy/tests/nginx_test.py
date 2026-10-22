@@ -123,6 +123,28 @@ class NginxPublishingTest(unittest.TestCase):
             with self.subTest(config=config), self.assertRaises(ValueError):
                 nginx.validate_environment(config, "dev")
 
+    def test_registry_routing_is_opt_in_and_rolls_back_to_the_legacy_gateway(self):
+        self.bootstrap()
+        source = self.root / "dev.conf"
+        source.write_text((DEPLOY / "nginx/dev.conf").read_text())
+        before = (self.publisher.directory / "dev.conf").read_bytes()
+        (self.root / "enable-project-routing").touch()
+        self.publisher.publish("dev", "registry-release", source)
+        actual = (self.publisher.directory / "dev.conf").read_text()
+        self.assertIn("auth_request /_locator_resolve;", actual)
+        self.assertIn("proxy_pass $project_upstream$project_uri;", actual)
+        self.assertIn("proxy_ssl_verify on;", actual)
+        self.assertIn("18554", actual)
+        self.assertIn("itzephir-projects-dev/fullchain.pem", actual)
+        self.assertNotIn("itzephir-projects-prod", actual)
+        self.assertNotIn("location ^~ /dev/project/", actual)
+        self.assertEqual(nginx.with_registry_gateway(actual, "dev"), actual)
+        self.assertNotIn("rewrite ^/dev/project/", actual)
+        self.assertIn("location ^~ /__staging-project/", actual)
+        self.assertEqual(nginx.without_project_gateway(actual).strip(), nginx.without_staging_interceptor(source.read_text()).strip())
+        self.publisher.rollback("dev", "registry-release")
+        self.assertEqual((self.publisher.directory / "dev.conf").read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

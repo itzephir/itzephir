@@ -19,6 +19,11 @@ if [[ -f "$candidate/deploy/require-locator" && ! -f "${LOCATOR_CONFIG_ROOT:-/et
     echo "Locator is required by this release; run committed deploy/setup-locator.py $target first" >&2
     exit 1
 fi
+if [[ -f "$candidate/nginx/enable-project-routing" ]]; then
+    [[ "$(/usr/local/sbin/itzephir-apply-nginx --version)" == "2" ]] || {
+        echo "Project routing requires the committed infrastructure upgrade before activation" >&2; exit 1;
+    }
+fi
 previous="$(readlink -f "$base/current" || true)"
 nginx_applied=false
 
