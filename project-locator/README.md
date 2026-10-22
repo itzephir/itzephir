@@ -70,11 +70,56 @@ or slug. An admin can restore the identity by rotating it; a revoked service
 credential cannot restore itself. Admin creation/review does not disclose any
 other project's service credential.
 
-The resolver is the registry boundary for routing integration. This change does
-not publish nginx snippets, start service containers or proxy arbitrary upstream
-URLs. An approved registration identifies a project; actual service deployment
-continues through the project's CI/CD. Adding registry-based gateway lookup can
-use `/resolve/{slug}` without giving the gateway an admin credential.
+## Publishing and routing
+
+The panel and API accept `routing: {"mode": "docker", "target": "app-container:8080"}`
+on registration and updates. Modes:
+
+| Mode | Target | Result |
+| --- | --- | --- |
+| `docker` | `app-container:8080` | Reverse proxy on `SLUG.itzephir.com` / `SLUG.dev.itzephir.com` |
+| `proxy` | `http://127.0.0.1:8080` or `https://example.org` | Reverse proxy on the same project subdomains |
+| `redirect` | `https://example.org/page?q=1` | Temporary redirect to the exact destination |
+| `legacy` | Empty | Existing project CI/nginx route, for backwards compatibility |
+
+Existing records and older registration clients default to `legacy`. Omitting
+`routing` from PATCH preserves the project's settings. A changed mode/target
+increments the revision; owner/service edits return to `pending` and require a
+new review. The admin request list displays the submitted target. Pending,
+rejected and revoked projects cannot be routed by the registry gateway.
+
+For Docker/proxy modes, `/dev/project/SLUG/` redirects with **307** to the
+matching stand's subdomain, preserving the remaining path and query string.
+`/dev/projects/SLUG/` is also accepted once registry routing is enabled.
+The reverse proxy serves the application at `/`, supports request bodies and
+WebSocket upgrades, resolves Docker names dynamically, verifies upstream HTTPS,
+and forwards the public host/protocol in `X-Forwarded-Host` / `X-Forwarded-Proto`.
+Proxy targets can include a base path, without query/fragment or credentials.
+Applications must trust forwarded headers only from this gateway. Applications
+which set absolute URLs or cookie domains may still need their public URL configured.
+
+A `redirect` uses the exact configured URL: source paths/query strings are not
+appended, and the destination may include a query or fragment. It does not require
+a project subdomain. Only HTTP/HTTPS destinations are accepted. Docker targets
+use a network name/alias without dots plus a numeric port; network aliases can be
+used for containers whose names contain dots. Proxy/Docker slugs must be DNS
+labels (1–63 lowercase letters/digits/hyphens, no trailing hyphen); `dev` and `www`
+are reserved. Legacy/redirect slugs retain underscore support.
+
+nginx uses `GET /api/project-locator/v1/gateway/{slug}` as an `auth_request`
+subrequest, setting `X-Project-Host`, `X-Project-Entry` and `X-Original-URI` itself.
+A 204 response supplies validated proxy headers; a 403 with Location selects a
+307 redirect; a 403 without Location becomes 404. These decisions contain only
+approved public configuration, and carry no authentication credentials. Browser
+cookies and Authorization are not sent to the resolver. Each request checks the
+current approval/revocation state; project edits do not write nginx configuration
+or grant the website access to Docker's socket.
+
+**Activation is separate from shipping the panel.** Without the release marker
+`nginx/enable-project-routing`, the existing gateway remains active and the panel
+shows that subdomain routing is not enabled. Configure DNS, wildcard certificates
+and the committed infrastructure before setting `PROJECT_ROUTING_ENABLED=true`
+in CI; see [deployment instructions](../deploy/README.md#project-subdomain-routing).
 
 ## Website and management panel
 
@@ -117,7 +162,7 @@ login, require CSRF tokens bound to browser cookies. GitHub authorization uses
 PKCE and one-time, expiring state records; provider access tokens are discarded
 after the server fetches the authenticated user's ID.
 
-Owners can edit project names/slugs. A changed owner submission returns to
+Owners can edit project names, slugs and routing settings. A changed owner submission returns to
 `pending` and clears its review, including edits of rejected requests; admin edits
 preserve approval. Identity and ownership cannot be supplied in metadata updates.
 A `revision` guards against overwriting concurrent edits or approving a request

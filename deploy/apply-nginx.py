@@ -64,11 +64,118 @@ def validate_environment(config, target):
 
 
 def without_project_gateway(config):
-    return re.sub(r"    # Managed project gateway;.*?(?=    location / \{)", "", config, flags=re.S)
+    config = re.sub(r"    # Managed project gateway;.*?(?=    location / \{)", "", config, flags=re.S)
+    config = re.sub(r"    # Managed project routing v2 start.*?    # Managed project routing v2 end\n\n?", "", config, flags=re.S)
+    return re.sub(r"\n# Managed project subdomains v2 start.*?# Managed project subdomains v2 end\n", "", config, flags=re.S)
+
+
+def without_staging_interceptor(config):
+    # Registry auth must run before deciding whether to invoke the legacy stage interceptor.
+    return re.sub(r"    # Legacy stage interceptor start\n.*?    # Legacy stage interceptor end\n\n?", "", config, flags=re.S)
+
+
+def routing_locations(target, entry):
+    port = PORTS[target]
+    dns_port = 18553 if target == "prod" else 18554
+    selector = ('~ "^/dev/projects?/(?<entry_slug>[a-z0-9][a-z0-9_-]{0,63})(?:/.*)?$"' if entry else "/")
+    slug = "$entry_slug" if entry else "$app_slug"
+    return f"""    # Managed project routing v2 start
+    location {selector} {{
+        set $locator_slug {slug};
+        set $locator_entry {'true' if entry else 'false'};
+        set $project_connection close;
+        if ($http_upgrade != "") {{ set $project_connection upgrade; }}
+        auth_request /_locator_resolve;
+        auth_request_set $project_upstream $upstream_http_x_project_upstream;
+        auth_request_set $project_uri $upstream_http_x_project_uri;
+        auth_request_set $project_host $upstream_http_x_project_upstream_host;
+        auth_request_set $project_tls_name $upstream_http_x_project_tls_name;
+        auth_request_set $project_redirect $upstream_http_location;
+        error_page 403 = @locator_unavailable;
+        resolver 127.0.0.1:{dns_port} valid=5s ipv6=off;
+        resolver_timeout 3s;
+        proxy_pass $project_upstream$project_uri;
+        proxy_http_version 1.1;
+        proxy_redirect $project_upstream/ /;
+        proxy_set_header Host $project_host;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $project_connection;
+        proxy_ssl_server_name on;
+        proxy_ssl_name $project_tls_name;
+        proxy_ssl_verify on;
+        proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+        proxy_connect_timeout 5s;
+        proxy_read_timeout 60s;
+        proxy_buffering off;
+        client_max_body_size 32m;
+    }}
+    location = /_locator_resolve {{
+        internal;
+        proxy_pass http://127.0.0.1:{port}/api/project-locator/v1/gateway/$locator_slug;
+        proxy_pass_request_body off;
+        proxy_set_header Content-Length "";
+        proxy_set_header X-Project-Host $host;
+        proxy_set_header X-Project-Entry $locator_entry;
+        proxy_set_header X-Project-Upgrade $http_upgrade;
+        proxy_set_header X-Original-URI $request_uri;
+        proxy_set_header Cookie "";
+        proxy_set_header Authorization "";
+    }}
+    location @locator_unavailable {{
+        add_header Cache-Control no-store always;
+        if ($project_redirect = "") {{ return 404; }}
+        return 307 $project_redirect;
+    }}
+    # Managed project routing v2 end
+
+"""
+
+
+def with_registry_gateway(config, target):
+    """The registry selects a proxy or redirect on every request, without nginx writes."""
+    config = without_staging_interceptor(without_project_gateway(config))
+    host = "itzephir.com" if target == "prod" else "dev.itzephir.com"
+    for block in server_blocks(config):
+        if names(block) == {host} and re.search(r"\blisten\s+(?:\[::\]:)?443\s", block):
+            anchor = "    location / {"
+            if block.count(anchor) != 1:
+                raise ValueError("Expected one canonical portfolio location")
+            config = config.replace(block, block.replace(anchor, routing_locations(target, entry=True) + anchor, 1), 1)
+            break
+    else:
+        raise ValueError("Missing canonical HTTPS server for project routing")
+    # Do not use .domain wildcards: they also match nested names. Each slug is one DNS label.
+    pattern = f'"~^(?<app_slug>[a-z0-9](?:[a-z0-9-]{{0,61}}[a-z0-9])?)\\.{host.replace(".", r"\.")}$"'
+    certificate = f"/etc/letsencrypt/live/itzephir-projects-{target}"
+    return config + f"""
+# Managed project subdomains v2 start
+server {{
+    listen 80;
+    listen [::]:80;
+    server_name {pattern};
+    location / {{ return 308 https://$host$request_uri; }}
+}}
+server {{
+    listen 443 ssl;
+    listen [::]:443 ssl;
+    http2 on;
+    server_name {pattern};
+    ssl_certificate {certificate}/fullchain.pem;
+    ssl_certificate_key {certificate}/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    server_tokens off;
+    add_header X-Content-Type-Options nosniff always;
+{routing_locations(target, entry=False)}}}
+# Managed project subdomains v2 end
+"""
 
 
 def with_project_gateway(config, target):
-    """The URL namespace stays /dev/project/; the hostname selects the stand."""
+    """Keep existing project deployments working until DNS/TLS and registry routing are enabled."""
     config = without_project_gateway(config)
     host = "itzephir.com" if target == "prod" else "dev.itzephir.com"
     port = 18100 if target == "prod" else 18101
@@ -173,7 +280,8 @@ class Publisher:
     def publish(self, target, release, source):
         config = without_project_gateway(source.read_text())
         validate_environment(config, target)
-        config = with_project_gateway(config, target)
+        enabled = (source.parent / "enable-project-routing").is_file()
+        config = (with_registry_gateway if enabled else with_project_gateway)(config, target)
         destination = self.directory / f"{target}.conf"
         state = self.directory / f".{target}-rollback.json"
         with self.locked():
@@ -197,6 +305,9 @@ class Publisher:
 
 
 def main(args):
+    if args == ["--version"]:
+        print("2")
+        return
     if os.geteuid() != 0:
         raise PermissionError("Run through the configured sudo command")
     publisher = Publisher()

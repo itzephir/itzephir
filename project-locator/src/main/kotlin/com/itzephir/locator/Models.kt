@@ -26,8 +26,9 @@ enum class IdentityRole {
 }
 
 @Serializable
-data class ProjectRequest(val project: String, val slug: String) {
+data class ProjectRequest(val project: String, val slug: String, val routing: ProjectRouting = ProjectRouting()) {
     fun validate() {
+        routing.validate(slug)
         if (!IDENTIFIER.matches(project) || !IDENTIFIER.matches(slug)) {
             throw LocatorException(400, "invalid_identifier", "project and slug must be 1-64 lowercase letters, digits, underscores or hyphens, starting with a letter or digit")
         }
@@ -37,9 +38,9 @@ data class ProjectRequest(val project: String, val slug: String) {
 }
 
 @Serializable
-data class ProjectUpdate(val project: String, val slug: String, val revision: Int) {
+data class ProjectUpdate(val project: String, val slug: String, val revision: Int, val routing: ProjectRouting? = null) {
     fun validate() {
-        ProjectRequest(project, slug).validate()
+        ProjectRequest(project, slug, routing ?: ProjectRouting()).validate()
         if (revision < 0) throw LocatorException(400, "invalid_revision", "Invalid project revision")
     }
 }
@@ -55,9 +56,12 @@ data class Project(
     val reviewedAt: String? = null,
     val reviewedBy: String? = null,
     val revision: Int = 0,
+    val routing: ProjectRouting = ProjectRouting(),
 ) {
     val productionUrl get() = "https://itzephir.com/dev/project/$slug/"
     val stageUrl get() = "https://dev.itzephir.com/dev/project/$slug/"
+    val productionAppUrl get() = "https://$slug.itzephir.com/"
+    val stageAppUrl get() = "https://$slug.dev.itzephir.com/"
 }
 
 @Serializable

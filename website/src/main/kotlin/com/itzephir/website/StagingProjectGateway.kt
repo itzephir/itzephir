@@ -24,8 +24,6 @@ import io.ktor.server.response.respondText
 import io.ktor.server.routing.route
 import io.ktor.server.routing.routing
 import io.ktor.util.AttributeKey
-import io.ktor.utils.io.ByteWriteChannel
-import io.ktor.utils.io.copyTo
 import kotlinx.coroutines.CancellationException
 import java.net.URI
 
@@ -84,7 +82,9 @@ internal fun Application.stagingProjectGateway(gatewayUrl: String = "http://127.
                         }
                     }.execute { response ->
                         val contentType = response.headers[HttpHeaders.ContentType]?.let(ContentType::parse)
-                        val html = decorate && contentType?.match(ContentType.Text.Html) == true &&
+                        val bodyless = call.request.httpMethod == HttpMethod.Head ||
+                            response.status in setOf(HttpStatusCode.NoContent, HttpStatusCode.ResetContent, HttpStatusCode.NotModified)
+                        val html = !bodyless && decorate && contentType?.match(ContentType.Text.Html) == true &&
                             response.headers[HttpHeaders.ContentDisposition] == null &&
                             response.headers[HttpHeaders.ContentEncoding] == null &&
                             response.headers[HttpHeaders.ContentRange] == null
@@ -103,14 +103,23 @@ internal fun Application.stagingProjectGateway(gatewayUrl: String = "http://127.
                             }
                         }
                         if (html) call.response.headers.append(HttpHeaders.CacheControl, "no-store")
-                        call.respond(object : OutgoingContent.WriteChannelContent() {
-                            override val contentType = contentType
-                            override val status = response.status
-                            override val contentLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.takeUnless { html }
-                            override suspend fun writeTo(channel: ByteWriteChannel) {
-                                response.bodyAsChannel().copyTo(channel)
-                            }
-                        })
+                        val responseLength = response.headers[HttpHeaders.ContentLength]?.toLongOrNull()?.takeUnless { html }
+                        if (bodyless) {
+                            call.respond(object : OutgoingContent.NoContent() {
+                                override val contentType = contentType
+                                override val status = response.status
+                                override val contentLength = responseLength
+                            })
+                        } else {
+                            val responseBody = response.bodyAsChannel()
+                            // Consume the stream before execute closes the upstream response.
+                            call.respond(object : OutgoingContent.ReadChannelContent() {
+                                override val contentType = contentType
+                                override val status = response.status
+                                override val contentLength = responseLength
+                                override fun readFrom() = responseBody
+                            })
+                        }
                     }
                 } catch (cancelled: CancellationException) {
                     throw cancelled

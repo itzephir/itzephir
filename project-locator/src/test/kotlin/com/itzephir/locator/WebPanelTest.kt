@@ -43,6 +43,34 @@ class WebPanelTest : LocatorDatabaseTest() {
         auth = PanelAuth(accounts, JWT_KEY)
     }
 
+    @Test fun `owner routing changes are saved for administrator review with the submitted target visible`() = testApplication {
+        val project = locator.register(ProjectRequest("app", "app"), admin).project
+        accounts.setOwners(UUID.fromString(project.id), setOf(UUID.fromString(owner.id)), project.revision, admin)
+        application { projectLocator(locator, false, auth, projectRoutingEnabled = true) }
+        val http = createClient { followRedirects = false }
+        val cookie = http.login("owner")
+        val edit = http.get("$PANEL/${project.id}/edit") { header(HttpHeaders.Cookie, cookie) }
+        val document = Jsoup.parse(edit.bodyAsText())
+        assertEquals(4, document.select("select[name=routingMode] option").size)
+        val saved = http.form("$PANEL/${project.id}/edit", mapOf(
+            "csrf" to edit.formToken(), "revision" to document.selectFirst("input[name=revision]")!!.attr("value"),
+            "project" to "app", "slug" to "app", "routingMode" to "docker", "routingTarget" to "app-container:8080",
+        ), cookie)
+        assertEquals(HttpStatusCode.SeeOther, saved.status)
+        val changed = locator.get(UUID.fromString(project.id), admin)
+        assertEquals(ProjectStatus.PENDING, changed.status)
+        assertEquals(ProjectRouting(RoutingMode.DOCKER, "app-container:8080"), changed.routing)
+        assertNull(locator.resolve("app"))
+        val reviewCookie = http.login("admin")
+        val pending = http.get("$PANEL?status=pending") { header(HttpHeaders.Cookie, reviewCookie) }
+        assertTrue(pending.bodyAsText().contains("app-container:8080"))
+        val ownerForm = http.get("$PANEL/${project.id}/edit") { header(HttpHeaders.Cookie, cookie) }
+        val retained = Jsoup.parse(ownerForm.bodyAsText())
+        assertEquals("docker", retained.selectFirst("select[name=routingMode] option[selected]")!!.attr("value"))
+        assertEquals("app-container:8080", retained.selectFirst("input[name=routingTarget]")!!.attr("value"))
+        assertFalse(ownerForm.bodyAsText().contains("Маршрутизация поддоменов ещё не включена"))
+    }
+
     @Test fun `login uses a secure JWT cookie and logout revokes the session`() = testApplication {
         application { projectLocator(locator, secureCookies = true, panelAuth = auth) }
         val http = createClient { followRedirects = false }

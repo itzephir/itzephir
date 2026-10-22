@@ -183,3 +183,67 @@ docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alp
 
 Build `:website:installDist` first. Ordinary Python test discovery skips this
 container-only test; the explicit CI step requires it to run.
+
+## Project subdomain routing
+
+The panel can save Docker, proxy and external redirect destinations. Activation is
+**opt-in**: normal releases keep the existing `/dev/project/SLUG/` gateway until
+repository variable `PROJECT_ROUTING_ENABLED` is `true`. No DNS, certificates or
+VM configuration are changed by the routing PR. Preview can show and test the new
+forms before public subdomains exist.
+
+Prepare the following separately before enabling the variable:
+
+1. In the DNS provider, add `*.itzephir.com` and `*.dev.itzephir.com` A records
+   pointing to the same VM as `itzephir.com`. Keep the existing root, www and dev
+   records. Do not publish AAAA records unless IPv6 is configured on the VM.
+2. Issue and configure automatic renewal of two wildcard certificates via DNS-01:
+   `*.itzephir.com` in `/etc/letsencrypt/live/itzephir-projects-prod/` and
+   `*.dev.itzephir.com` in `/etc/letsencrypt/live/itzephir-projects-dev/`.
+   Each directory needs `fullchain.pem` and `privkey.pem`. Configure nginx reload
+   after renewal. The existing root-domain certificate stays in use for the
+   portfolio/panel. Timeweb DNS automation and certificate issuance are separate
+   infrastructure work; this PR does not install a provider plugin or credentials.
+3. Prepare the GitHub `infrastructure` environment with a dedicated
+   `INFRA_SSH_KEY` for root provisioning, and the existing deployment host/known
+   hosts settings. Review the merged commit, then run **Prepare project routing
+   infrastructure** from `main`, once for `dev` and once for `prod`. The VM needs
+   Docker, nginx with `http_auth_request`, OpenSSL and `dig` (`dnsutils`).
+4. Connect each project container to **only its stand's** user-defined network:
+   `itzephir-projects-dev` or `itzephir-projects-prod`. Put this network membership
+   and a stable alias in that project's committed deployment configuration.
+   Use the alias and internal application port in the panel, e.g. `minor-web:8080`.
+   Docker ports do not need to be published. For services already on the VM,
+   select proxy and use a loopback address/port.
+5. After **both stands** are prepared, set repository variable
+   `PROJECT_ROUTING_ENABLED=true` and run normal application CI. New releases
+   package `nginx/enable-project-routing`. The activation script checks publisher
+   version 2 before switching releases; missing TLS files fail nginx validation
+   and trigger normal app/config rollback. Enabling the variable alone cannot
+   install the privileged helper. To disable routing, remove/set the variable to
+   false and deploy another release; that restores the legacy gateway.
+
+The committed setup script verifies the wildcard certificate and starts one
+restricted CoreDNS container per environment, pinned by image digest. It forwards
+DNS to Docker's built-in resolver on that stand's network, exposed only on
+loopback `18553` (prod) / `18554` (dev), UDP and TCP. The website keeps running as
+its existing systemd service and receives no Docker socket or Docker group access.
+The script installs the publisher but does not reload nginx or restart the website;
+normal application CI activates changes. Project edits thereafter take effect on
+the next request, without another nginx deployment. The resolver uses a five-second
+DNS cache so a restarted container's new address is picked up automatically.
+
+Configured projects use `SLUG.itzephir.com` (prod) and `SLUG.dev.itzephir.com`
+(stage). The stable `/dev/project/SLUG/` URL redirects with 307 to the matching
+subdomain or exact external URL; `/dev/projects/SLUG/` is an alias. Legacy projects
+still use their original path: production and upgrades go directly to
+`18100`/`18101`; ordinary stage requests pass through the existing Ktor HTML
+interceptor before `18101`, preserving stage badges. The registry replaces the
+unconditional stage rewrite so approval checks and redirects run first. Approved registry entries are
+required once routing is enabled, including legacy projects. Review destinations
+before approving: proxy destinations are served by the VM and must be trusted.
+
+Gateway verification uses the generated configuration with real nginx, mock HTTP/
+HTTPS backends and DNS, checking redirects, request bodies, verified TLS, legacy
+routes, missing/pending/revoked projects and WebSocket upgrades. CI runs it in an
+isolated container; it does not need real DNS or certificates.

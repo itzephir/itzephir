@@ -21,6 +21,7 @@ class StagingProjectGatewayTest {
     private val requests = ConcurrentLinkedQueue<List<String>>()
     private val html = "<!doctype html><html><head><title>Project</title></head><body><h1>Project</h1>${"content ".repeat(8000)}</body></html>"
     private val binary = ByteArray(256) { it.toByte() }
+    private val slowBinary = ByteArray(256 * 1024) { it.toByte() }
     private val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
         createContext("/") { exchange ->
             val incoming = exchange.requestBody.readAllBytes()
@@ -38,13 +39,14 @@ class StagingProjectGatewayTest {
                 }
                 path.endsWith("/api") -> "{\"ok\":true}".toByteArray()
                 path.endsWith("/file") -> binary
+                path.endsWith("/slow-file") -> slowBinary
                 path.endsWith("/upload") -> incoming
                 path.endsWith("/fragment") -> "<main>partial</main>".toByteArray()
                 else -> html.toByteArray()
             }
             val type = when {
                 path.endsWith("/api") -> "application/json"
-                path.endsWith("/file") || path.endsWith("/upload") -> "application/octet-stream"
+                path.endsWith("/file") || path.endsWith("/slow-file") || path.endsWith("/upload") -> "application/octet-stream"
                 else -> "text/html; charset=utf-8"
             }
             if (path.endsWith("/range")) {
@@ -63,7 +65,16 @@ class StagingProjectGatewayTest {
                 exchange.sendResponseHeaders(status, -1)
             } else {
                 exchange.sendResponseHeaders(status, if (payload.isEmpty()) -1 else payload.size.toLong())
-                exchange.responseBody.use { it.write(payload) }
+                exchange.responseBody.use { output ->
+                    if (path.endsWith("/slow-file")) {
+                        Thread.sleep(200)
+                        for (offset in payload.indices step 8192) {
+                            output.write(payload, offset, minOf(8192, payload.size - offset))
+                            output.flush()
+                            Thread.sleep(2)
+                        }
+                    } else output.write(payload)
+                }
             }
             exchange.close()
         }
@@ -127,6 +138,15 @@ class StagingProjectGatewayTest {
         assertEquals(HttpStatusCode.OK, head.status)
         assertEquals(html.toByteArray().size.toString(), head.headers[HttpHeaders.ContentLength])
         assertContentEquals(byteArrayOf(), head.bodyAsBytes())
+    }
+
+    @Test
+    fun `slow upstream body remains open until proxy streaming finishes`() = testApplication {
+        application { install(StagingBadge); stagingProjectGateway("http://127.0.0.1:${server.address.port}") }
+        val response = client.get("$stagingProjectPrefix/example/slow-file")
+        assertEquals(HttpStatusCode.OK, response.status)
+        assertContentEquals(slowBinary, response.bodyAsBytes())
+        assertEquals("\"project-v1\"", response.headers[HttpHeaders.ETag])
     }
 
     @Test

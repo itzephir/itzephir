@@ -48,7 +48,10 @@ fun Application.module(
         install(StagingBadge)
         stagingProjectGateway()
     }
-    if (locator != null) projectLocator(locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames))
+    if (locator != null) projectLocator(
+        locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames),
+        projectRoutingEnabled = java.nio.file.Files.isRegularFile(java.nio.file.Path.of("nginx/enable-project-routing")),
+    )
     routing {
         get("/healthz") {
             call.response.header(HttpHeaders.CacheControl, "no-store")
