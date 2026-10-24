@@ -295,6 +295,8 @@ class LocatorTest : LocatorDatabaseTest() {
             assertEquals(identityId.toString(), service.id)
             assertEquals("legacy", upgraded.get(projectId, service).slug)
             assertEquals(0, upgraded.get(projectId, service).revision)
+            assertEquals("", upgraded.get(projectId, service).description)
+            assertEquals(ProjectReadiness.DEVELOPMENT, upgraded.get(projectId, service).readiness)
             WebAccounts(upgraded).bootstrapAdmin("admin", "a-valid-migration-test-password", null)
         } finally {
             source.connection.use { it.createStatement().use { query -> query.execute("DROP SCHEMA $upgradeSchema CASCADE") } }

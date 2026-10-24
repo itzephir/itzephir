@@ -39,8 +39,10 @@
 .dev-ui .project-link { display:inline-flex; min-height:44px; align-items:center; padding:10px 16px; border:1px solid var(--line); border-radius:6px; font-weight:500; }
 .dev-ui .field { display:flex; flex-direction:column; gap:8px; min-width:0; }
 .dev-ui label { font-weight:500; }
-.dev-ui select, .dev-ui input:not([type="hidden"]):not([type="checkbox"]) { width:100%; min-width:0; height:44px; padding:10px 14px; border:1px solid var(--line); border-radius:6px; font:inherit; background:var(--panel); color:var(--text); }
-.dev-ui select:focus-visible, .dev-ui input:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
+.dev-ui select, .dev-ui textarea, .dev-ui input:not([type="hidden"]):not([type="checkbox"]) { width:100%; min-width:0; height:44px; padding:10px 14px; border:1px solid var(--line); border-radius:6px; font:inherit; background:var(--panel); color:var(--text); }
+.dev-ui textarea { min-height:112px; resize:vertical; }
+.dev-ui .project-description { white-space:pre-wrap; overflow-wrap:anywhere; }
+.dev-ui select:focus-visible, .dev-ui input:focus-visible, .dev-ui textarea:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }
 .dev-ui input[aria-invalid="true"] { border-color:var(--accent); }
 .dev-ui button, .dev-ui .button, .dev-sidebar button { display:inline-flex; align-items:center; justify-content:center; align-self:flex-start; min-height:44px; padding:10px 16px; border:1px solid transparent; border-radius:6px; font:500 15px/22px "IBM Plex Sans",sans-serif; cursor:pointer; color:var(--button-ink,#191d21); background:var(--button,#e5eaf0); text-decoration:none; }
 [data-theme="light"] .dev-sidebar button { --button:#293744; --button-ink:#fafbfc; }

@@ -17,6 +17,15 @@ enum class ProjectStatus {
 }
 
 @Serializable
+enum class ProjectReadiness {
+    @SerialName("planning") PLANNING,
+    @SerialName("development") DEVELOPMENT;
+
+    val databaseValue get() = name.lowercase()
+    val canOpen get() = this == DEVELOPMENT
+}
+
+@Serializable
 enum class IdentityRole {
     @SerialName("project") PROJECT,
     @SerialName("owner") OWNER,
@@ -26,9 +35,16 @@ enum class IdentityRole {
 }
 
 @Serializable
-data class ProjectRequest(val project: String, val slug: String, val routing: ProjectRouting = ProjectRouting()) {
+data class ProjectRequest(
+    val project: String,
+    val slug: String,
+    val routing: ProjectRouting = ProjectRouting(),
+    val description: String = "",
+    val readiness: ProjectReadiness = ProjectReadiness.DEVELOPMENT,
+) {
     fun validate() {
         routing.validate(slug)
+        validateDescription(description)
         if (!IDENTIFIER.matches(project) || !IDENTIFIER.matches(slug)) {
             throw LocatorException(400, "invalid_identifier", "project and slug must be 1-64 lowercase letters, digits, underscores or hyphens, starting with a letter or digit")
         }
@@ -38,9 +54,17 @@ data class ProjectRequest(val project: String, val slug: String, val routing: Pr
 }
 
 @Serializable
-data class ProjectUpdate(val project: String, val slug: String, val revision: Int, val routing: ProjectRouting? = null) {
+data class ProjectUpdate(
+    val project: String,
+    val slug: String,
+    val revision: Int,
+    val routing: ProjectRouting? = null,
+    val description: String? = null,
+    val readiness: ProjectReadiness? = null,
+) {
     fun validate() {
         ProjectRequest(project, slug, routing ?: ProjectRouting()).validate()
+        description?.let(::validateDescription)
         if (revision < 0) throw LocatorException(400, "invalid_revision", "Invalid project revision")
     }
 }
@@ -57,6 +81,8 @@ data class Project(
     val reviewedBy: String? = null,
     val revision: Int = 0,
     val routing: ProjectRouting = ProjectRouting(),
+    val description: String = "",
+    val readiness: ProjectReadiness = ProjectReadiness.DEVELOPMENT,
 ) {
     val productionUrl get() = "https://itzephir.com/dev/project/$slug/"
     val stageUrl get() = "https://dev.itzephir.com/dev/project/$slug/"
@@ -80,6 +106,10 @@ data class ResolvedProject(val project: Project, val productionUrl: String, val 
 data class ApiError(val code: String, val message: String)
 
 class LocatorException(val status: Int, val code: String, override val message: String) : RuntimeException(message)
+
+private fun validateDescription(description: String) {
+    if (description.length > 500) throw LocatorException(400, "invalid_description", "Описание должно содержать не более 500 символов.")
+}
 
 internal object Tokens {
     private val random = SecureRandom()
