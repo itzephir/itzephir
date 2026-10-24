@@ -50,15 +50,16 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                         a(PANEL, classes = "button secondary") { +"Панель проектов" }
                     }
                     div("page-heading") { h1 { +"Проекты в разработке" }; p("muted") { +"Сервисы, инструменты и новые идеи, над которыми я работаю." } }
-                    p("eyebrow mono") { +"ОПУБЛИКОВАНО / ${projects.take(24).size}" }
+                    p("eyebrow mono") { +"ПРОЕКТЫ / ${projects.take(24).size}" }
                     if (projects.isEmpty()) div("empty") { h2 { +"Новые проекты скоро появятся" }; p { +"Здесь будут собраны проекты в разработке." } }
                     div("project-grid") { projects.take(24).forEach { project ->
                         article("project-card") {
                             h2 { +project.project }
+                            if (project.description.isNotBlank()) p("project-description") { +project.description }
                             p("muted mono") { +"/dev/project/${project.slug}/" }
                             div("project-card-actions") {
-                                a("/dev/project/${project.slug}/", classes = "project-link") { +"Открыть проект" }
-                                span("help") { +"В разработке" }
+                                if (project.readiness.canOpen) a("/dev/project/${project.slug}/", classes = "project-link") { +"Открыть проект" }
+                                span("help") { +project.readiness.label() }
                             }
                         }
                     } }
@@ -108,8 +109,10 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                     div("project-list") { projects.take(50).forEach { project ->
                         article("project-row") {
                             h2 { a("$PANEL/${project.id}/edit") { +project.project } }
+                            if (project.description.isNotBlank()) p("project-description") { +project.description }
                             div("project-row-meta") {
                                 p("muted mono") { +"/${project.slug}" }
+                                span("help") { +project.readiness.label() }
                                 p("help") { +project.routing.mode.label(); if (project.routing.target.isNotEmpty()) +" · ${project.routing.target}" }
                                 span("badge ${project.status.databaseValue}") { +project.status.label() }
                             }
@@ -172,13 +175,14 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                 verifyCsrf(call.request.cookies[PANEL_COOKIE], form)
                 val project = locator.get(parseId(call.parameters["id"]!!), actor)
                 val revision = form["revision"]?.toIntOrNull() ?: throw LocatorException(400, "invalid_revision", "Missing revision")
-                val update = ProjectUpdate(form["project"] ?: "", form["slug"] ?: "", revision, form.routing())
+                val update = ProjectUpdate(form["project"] ?: "", form["slug"] ?: "", revision, form.routing(), form["description"], form.readiness())
                 try {
                     locator.update(parseId(project.id), update, actor)
                     call.seeOther("$PANEL/${project.id}/edit")
                 } catch (error: LocatorException) {
                     if (error.status !in listOf(400, 409)) throw error
-                    call.editPage(project.copy(project = update.project, slug = update.slug, revision = revision, routing = update.routing ?: project.routing), actor, formToken, projectRoutingEnabled, error, if (actor.role == IdentityRole.ADMIN) auth!!.accounts.users(actor) else emptyList(), if (actor.role == IdentityRole.ADMIN) auth!!.accounts.owners(parseId(project.id), actor) else emptySet())
+                    call.editPage(project.copy(project = update.project, slug = update.slug, revision = revision, routing = update.routing ?: project.routing,
+                        description = update.description ?: project.description, readiness = update.readiness ?: project.readiness), actor, formToken, projectRoutingEnabled, error, if (actor.role == IdentityRole.ADMIN) auth!!.accounts.users(actor) else emptyList(), if (actor.role == IdentityRole.ADMIN) auth!!.accounts.owners(parseId(project.id), actor) else emptySet())
                 }
             }
             post("/panel/create") {
@@ -186,7 +190,8 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                 requireAdmin(actor)
                 val form = call.receiveParameters()
                 verifyCsrf(call.request.cookies[PANEL_COOKIE], form)
-                val registration = locator.register(ProjectRequest(form["project"] ?: "", form["slug"] ?: "", form.routing() ?: ProjectRouting()), actor)
+                val registration = locator.register(ProjectRequest(form["project"] ?: "", form["slug"] ?: "", form.routing() ?: ProjectRouting(),
+                    form["description"].orEmpty(), form.readiness() ?: ProjectReadiness.DEVELOPMENT), actor)
                 call.renderPage("Проект создан", actor, csrf(call.request.cookies[PANEL_COOKIE]!!)) {
                     h1 { +"Проект создан" }; p { +registration.project.project }
                     div("card") { h2 { +"Сохраните API-токен" }; p("muted") { +"Он показывается только сейчас. Используйте его для доступа к проекту." }; pre { code { +registration.token } } }
@@ -354,8 +359,8 @@ private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, 
         section("card") {
             form(action = "$PANEL/${project.id}/edit", method = FormMethod.post) {
                 hiddenCsrf(formToken); hiddenInput(name = "revision") { value = project.revision.toString() }
-                projectFields(project.project, project.slug, project.routing, enabled)
-                if (actor.role != IdentityRole.ADMIN) p("help") { +"После изменения имени, slug или способа публикации проект отправится на повторное одобрение." }
+                projectFields(project.project, project.slug, project.routing, enabled, project.description, project.readiness)
+                if (actor.role != IdentityRole.ADMIN) p("help") { +"После изменения данных проекта он отправится на повторное одобрение." }
                 button(type = ButtonType.submit) { +"Сохранить изменения" }
             }
         }
@@ -372,6 +377,7 @@ private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, 
         }
         section("card details") {
             h2 { +"Адреса проекта" }
+            if (!project.readiness.canOpen) p("help") { +"Проект находится на этапе проектирования. Адреса сохранены для будущего запуска; переход к приложению пока недоступен." }
             if (project.routing.mode in listOf(RoutingMode.DOCKER, RoutingMode.PROXY)) {
                 p("help") { +"Ссылки ниже перенаправляют на ${project.productionAppUrl} и ${project.stageAppUrl}." }
             }
@@ -383,8 +389,21 @@ private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, 
 }
 
 private fun FlowContent.hiddenCsrf(value: String) { hiddenInput(name = "csrf") { this.value = value } }
-private fun FORM.projectFields(project: String, slug: String, routing: ProjectRouting = ProjectRouting(), enabled: Boolean) {
+private fun FORM.projectFields(project: String, slug: String, routing: ProjectRouting = ProjectRouting(), enabled: Boolean,
+    description: String = "", readiness: ProjectReadiness = ProjectReadiness.DEVELOPMENT) {
     div("field") { label { htmlFor = "project"; +"Имя проекта" }; textInput(name = "project") { id = "project"; value = project; required = true; attributes["maxlength"] = "64"; attributes["pattern"] = "[a-z0-9][a-z0-9_-]{0,63}"; attributes["autocomplete"] = "off" }; p("help") { +"Например, minor-website. Строчные латинские буквы, цифры, дефис и подчёркивание." } }
+    div("field") {
+        label { htmlFor = "description"; +"Описание" }
+        textArea { id = "description"; name = "description"; rows = "3"; attributes["maxlength"] = "500"; +description }
+        p("help") { +"До 500 символов. Описание будет видно в мастерской." }
+    }
+    div("field") {
+        label { htmlFor = "readiness"; +"Готовность проекта" }
+        select { id = "readiness"; name = "readiness"; ProjectReadiness.entries.forEach { state -> option {
+            value = state.databaseValue; selected = state == readiness; +state.label()
+        } } }
+        p("help") { +"Проектирование: карточка без кнопки запуска. В разработке: кнопка открытия включена. Включайте открытие после проверки приложения и его адреса." }
+    }
     div("field") { label { htmlFor = "slug"; +"Slug в адресе" }; textInput(name = "slug") { id = "slug"; value = slug; required = true; attributes["maxlength"] = "64"; attributes["pattern"] = "[a-z0-9][a-z0-9_-]{0,63}"; attributes["autocomplete"] = "off" }; p("help") { +"Ссылка на проект: /dev/project/<slug>/. Поддомен: <slug>.itzephir.com (stage: <slug>.dev.itzephir.com). Для поддомена — только буквы, цифры и дефисы, до 63 символов." } }
     if (!enabled) p("notice") { +"Маршрутизация поддоменов ещё не включена. Настройки можно сохранить заранее; существующие адреса продолжают работать." }
     div("field") {
@@ -403,6 +422,15 @@ private fun Parameters.routing(): ProjectRouting? {
     val mode = RoutingMode.entries.firstOrNull { it.databaseValue == value }
         ?: throw LocatorException(400, "invalid_routing", "Выберите способ публикации.")
     return ProjectRouting(mode, this["routingTarget"].orEmpty().trim())
+}
+private fun Parameters.readiness(): ProjectReadiness? {
+    val value = this["readiness"] ?: return null
+    return ProjectReadiness.entries.firstOrNull { it.databaseValue == value }
+        ?: throw LocatorException(400, "invalid_readiness", "Выберите готовность проекта.")
+}
+private fun ProjectReadiness.label() = when (this) {
+    ProjectReadiness.PLANNING -> "Проектирование"
+    ProjectReadiness.DEVELOPMENT -> "В разработке"
 }
 private fun RoutingMode.label() = when (this) {
     RoutingMode.LEGACY -> "Существующий маршрут из CI"
@@ -423,7 +451,7 @@ private fun FlowContent.pagination(base: String, offset: Int, step: Int, more: B
         if (more) a("$base${separator}offset=${offset + step}") { +"Далее →" }
     }
 }
-private fun ProjectStatus.label() = when (this) { ProjectStatus.PENDING -> "На проверке"; ProjectStatus.APPROVED -> "Опубликован"; ProjectStatus.REJECTED -> "Отклонён" }
+private fun ProjectStatus.label() = when (this) { ProjectStatus.PENDING -> "На проверке"; ProjectStatus.APPROVED -> "Одобрен"; ProjectStatus.REJECTED -> "Отклонён" }
 private fun LocatorException.friendly() = when (code) {
     "panel_unconfigured" -> "Панель пока недоступна."
     "github_unconfigured" -> "Вход через GitHub пока недоступен."
@@ -440,7 +468,7 @@ private fun LocatorException.friendly() = when (code) {
     "csrf_failed" -> "Форма устарела. Обновите страницу и повторите действие."
     "project_conflict" -> "Имя проекта или slug уже заняты."
     "stale_project" -> "Данные проекта уже изменились. Обновите страницу перед сохранением или одобрением."
-    "invalid_routing" -> message
+    "invalid_routing", "invalid_description", "invalid_readiness" -> message
     "invalid_identifier" -> "Проверьте имя и slug: до 64 строчных латинских букв, цифр, дефисов или подчёркиваний."
     else -> "Не удалось выполнить действие. Обновите страницу и попробуйте снова."
 }

@@ -21,7 +21,7 @@ class PostgresLocator(private val dataSource: DataSource) {
             connection.createStatement().use {
                 it.execute("CREATE TABLE IF NOT EXISTS locator_schema_migrations (version integer PRIMARY KEY, checksum char(64) NOT NULL, installed_at timestamptz NOT NULL DEFAULT now())")
             }
-            listOf("001-initial.sql", "002-panel.sql", "003-routing.sql").forEachIndexed { index, name ->
+            listOf("001-initial.sql", "002-panel.sql", "003-routing.sql", "004-catalog.sql").forEachIndexed { index, name ->
                 val version = index + 1
                 val migration = checkNotNull(javaClass.getResource("/db/locator/$name")).readText()
                 val checksum = Tokens.hash(migration)
@@ -76,13 +76,14 @@ class PostgresLocator(private val dataSource: DataSource) {
                 it.setObject(1, identityId); it.setString(2, Tokens.hash(token)); it.executeUpdate()
             }
             connection.prepareStatement("""
-                INSERT INTO locator_projects (id, project, slug, identity_id, status, reviewed_at, reviewed_by, routing_mode, routing_target)
-                VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 'approved' THEN now() ELSE NULL END, ?, ?, ?) RETURNING *
+                INSERT INTO locator_projects (id, project, slug, identity_id, status, reviewed_at, reviewed_by, routing_mode, routing_target, description, readiness)
+                VALUES (?, ?, ?, ?, ?, CASE WHEN ? = 'approved' THEN now() ELSE NULL END, ?, ?, ?, ?, ?) RETURNING *
             """.trimIndent()).use {
                 it.setObject(1, projectId); it.setString(2, request.project); it.setString(3, request.slug)
                 it.setObject(4, identityId); it.setString(5, status.databaseValue); it.setString(6, status.databaseValue)
                 it.setObject(7, actor?.let { identity -> UUID.fromString(identity.id) })
                 it.setString(8, request.routing.mode.databaseValue); it.setString(9, request.routing.target)
+                it.setString(10, request.description); it.setString(11, request.readiness.databaseValue)
                 it.executeQuery().use { rows -> check(rows.next()); rows.project() }
             }
         }
@@ -123,11 +124,14 @@ class PostgresLocator(private val dataSource: DataSource) {
             val before = ownedProject(connection, id, actor, lock = true)
             if (before.revision != request.revision) throw LocatorException(409, "stale_project", "Project changed; reload before editing")
             val routing = request.routing ?: before.routing
+            val description = request.description ?: before.description
+            val readiness = request.readiness ?: before.readiness
             routing.validate(request.slug)
-            if (before.project == request.project && before.slug == request.slug && before.routing == routing) return@transaction before
+            if (before.project == request.project && before.slug == request.slug && before.routing == routing &&
+                before.description == description && before.readiness == readiness) return@transaction before
             val needsReview = actor.role != IdentityRole.ADMIN
             connection.prepareStatement("""
-                UPDATE locator_projects SET project = ?, slug = ?, routing_mode = ?, routing_target = ?, revision = revision + 1,
+                UPDATE locator_projects SET project = ?, slug = ?, routing_mode = ?, routing_target = ?, description = ?, readiness = ?, revision = revision + 1,
                 status = CASE WHEN ? THEN 'pending' ELSE status END,
                 reviewed_at = CASE WHEN ? THEN NULL ELSE reviewed_at END,
                 reviewed_by = CASE WHEN ? THEN NULL ELSE reviewed_by END
@@ -135,7 +139,8 @@ class PostgresLocator(private val dataSource: DataSource) {
             """.trimIndent()).use {
                 it.setString(1, request.project); it.setString(2, request.slug)
                 it.setString(3, routing.mode.databaseValue); it.setString(4, routing.target)
-                it.setBoolean(5, needsReview); it.setBoolean(6, needsReview); it.setBoolean(7, needsReview); it.setObject(8, id)
+                it.setString(5, description); it.setString(6, readiness.databaseValue)
+                it.setBoolean(7, needsReview); it.setBoolean(8, needsReview); it.setBoolean(9, needsReview); it.setObject(10, id)
                 it.executeQuery().use { rows -> check(rows.next()); rows.project() }
             }
         }
@@ -213,6 +218,7 @@ class PostgresLocator(private val dataSource: DataSource) {
         ProjectStatus.valueOf(getString("status").uppercase()), getTimestamp("created_at").toInstant().toString(),
         getTimestamp("reviewed_at")?.toInstant()?.toString(), getString("reviewed_by"), getInt("revision"),
         ProjectRouting(RoutingMode.valueOf(getString("routing_mode").uppercase()), getString("routing_target")),
+        getString("description"), ProjectReadiness.valueOf(getString("readiness").uppercase()),
     )
 
     companion object { private val ADMIN_ID = UUID.fromString("00000000-0000-0000-0000-000000000001") }

@@ -142,6 +142,8 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await admin.goto(`${panel}/new`);
         await admin.getByLabel('Имя проекта', { exact: true }).fill('ui-created');
         await admin.getByLabel('Slug в адресе', { exact: true }).fill('ui_created');
+        await admin.getByLabel('Описание', { exact: true }).fill('Личный и семейный бюджет. Приложение ещё не опубликовано.');
+        await admin.getByLabel('Готовность проекта', { exact: true }).selectOption('planning');
         await admin.getByLabel('Способ публикации', { exact: true }).selectOption('redirect');
         await admin.getByLabel('Адрес назначения', { exact: true }).fill('https://example.org/ui-created');
         await admin.getByRole('button', { name: 'Создать проект', exact: true }).click();
@@ -152,8 +154,29 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         assert.ok(!(await admin.locator('body').textContent()).includes(issuedToken), 'Token is shown only in creation response');
         assert.equal(await admin.getByLabel('Способ публикации', { exact: true }).inputValue(), 'redirect');
         assert.equal(await admin.getByLabel('Адрес назначения', { exact: true }).inputValue(), 'https://example.org/ui-created');
+        assert.equal(await admin.getByLabel('Готовность проекта', { exact: true }).inputValue(), 'planning');
+        assert.equal(await admin.getByLabel('Описание', { exact: true }).inputValue(), 'Личный и семейный бюджет. Приложение ещё не опубликовано.');
         await publicPage.goto(`${base}/dev`);
         assert.equal(await publicPage.getByText('ui-created', { exact: true }).count(), 1);
+        const planning = publicPage.locator('.project-card').filter({ hasText: 'ui-created' });
+        assert.equal(await planning.getByText('Проектирование', { exact: true }).count(), 1);
+        assert.equal(await planning.locator('a').count(), 0);
+        assert.equal(await planning.locator('.project-description').textContent(), 'Личный и семейный бюджет. Приложение ещё не опубликовано.');
+        for (const width of [320, 1440]) for (const theme of ['dark', 'light']) {
+            await publicPage.setViewportSize({ width, height: 1000 });
+            await publicPage.goto(`${base}/dev?theme=${theme}`);
+            assert.ok(await publicPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Catalog overflows: ${width}, ${theme}`);
+            assert.equal(await planning.locator('a').count(), 0);
+            await publicPage.screenshot({ path: resolve(output, `catalog-${theme}-${width}.png`), fullPage: true });
+        }
+        await admin.getByLabel('Описание', { exact: true }).fill('Описание после редактирования');
+        await admin.getByRole('button', { name: 'Сохранить изменения', exact: true }).click();
+        await publicPage.goto(`${base}/dev`);
+        assert.equal(await planning.locator('.project-description').textContent(), 'Описание после редактирования');
+        await admin.getByLabel('Готовность проекта', { exact: true }).selectOption('development');
+        await admin.getByRole('button', { name: 'Сохранить изменения', exact: true }).click();
+        await publicPage.goto(`${base}/dev`);
+        assert.equal(await planning.getByRole('link', { name: 'Открыть проект', exact: true }).count(), 1);
         // HTMX fragments and document restoration retain the same authenticated route and tab.
         const enhanced = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
         await enhanced.addCookies(await adminContext.cookies());
