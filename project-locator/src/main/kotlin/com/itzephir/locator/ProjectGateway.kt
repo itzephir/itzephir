@@ -20,7 +20,7 @@ internal suspend fun ApplicationCall.gateway(project: Project?) {
         if (stage) "$slug.dev.itzephir.com" else "$slug.itzephir.com"
     }
     val original = request.headers["X-Original-URI"].orEmpty()
-    if (project == null || host != expectedHost || !original.startsWith('/') || original.startsWith("//") ||
+    if (project == null || !project.readiness.canOpen || host != expectedHost || !original.startsWith('/') || original.startsWith("//") ||
         original.length > 8192 || original.any { it.code < 32 || it.code == 127 } || '#' in original || '\\' in original) {
         respond(HttpStatusCode.Forbidden)
         return

@@ -99,7 +99,8 @@ remain in the document, outside the mobile header.
 | Empty / stale data states | `70:6254` | `70:6387` | `70:6516` |
 
 The gallery uses real registry names and slugs. Approved, non-revoked projects
-link to `/dev/project/<slug>/` on the current host. Owner assignment appears
+appear on the gallery; projects with `development` readiness link to
+`/dev/project/<slug>/` on the current host. Owner assignment appears
 only for administrators in existing project settings. GitHub login/linking is
 conditional on provider configuration; password login is always the initial
 configured flow. Sample projects, usernames and masked tokens in Figma are
@@ -116,3 +117,28 @@ website's document renderer. `Development.kt` supplies its content to
 `SiteShell.kt`; `dev.css` owns only section content, and all global chrome
 continues to be owned by `site-shell.css`. The legacy `/dev/assets/style.css`
 URL serves the same content stylesheet for deployment compatibility.
+
+### Catalog description and planning state
+
+The editable [catalog supplement](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=123-3763)
+preserves the v1 frames and shared shell. Gallery examples are `123:3763` (dark),
+`123:3886` (light) and `123:4007` (mobile). They reuse the existing cards,
+Workspace typography and theme bindings. The itzmoney text is a design example;
+the implementation reads project metadata from PostgreSQL.
+
+Cards optionally show a plain-text description before the stable entry path.
+Readiness `planning` shows «Проектирование» without a launch button;
+`development` retains «В разработке» and the existing launch button. The gallery
+counter says «ПРОЕКТЫ» because a visible card does not mean a deployed application.
+Review approval is labelled «Одобрен» separately from readiness.
+
+Creation and settings reuse the existing form fields with a description textarea
+(500 characters, at least 112 px high) and a readiness select (44 px). Labels,
+focus states, colors and typography follow the existing Dev/Input treatment.
+No shared header, navigation, component master or shell contract changes.
+
+Figma CLI returned no open design files, including outside the sandbox after
+opening the portfolio. The supplement was added and inspected through Figma MCP
+as the documented fallback; editable layers, IBM Plex Sans/Mono, theme bindings,
+dimensions and screenshots were checked. Browser screenshots cover both themes
+at 320 and 1440 px; the existing wider responsive suite also covers the forms.

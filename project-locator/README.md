@@ -70,6 +70,53 @@ or slug. An admin can restore the identity by rotating it; a revoked service
 credential cannot restore itself. Admin creation/review does not disclose any
 other project's service credential.
 
+## Description and readiness
+
+Project registration accepts optional `description` (plain text, up to 500
+characters) and `readiness`. The panel exposes both fields on creation and edit.
+They belong to the PostgreSQL registry; the gallery has no project-specific list.
+
+| Readiness | Public card | Registry gateway |
+| --- | --- | --- |
+| `planning` | Description and «Проектирование», without a launch link | Denies routing, including saved redirects |
+| `development` | Description, «В разработке» and the existing launch link | Uses the approved routing configuration |
+
+Readiness is independent of review status (`pending`, `approved`, `rejected`).
+An approved planning project appears in `/dev` and `/resolve/{slug}` describes
+its saved metadata; this does not mean an application is deployed or reachable.
+Pending, rejected and revoked projects remain hidden. Readiness is a manual
+catalog setting, not an automated health check.
+
+Migration `004-catalog.sql` preserves existing projects, identities and routes,
+with an empty description and `development` readiness. Older registration clients
+get the same defaults. Omitting either field on PATCH preserves its stored value;
+send `description: ""` to clear it. Any owner/service metadata change, including
+description or readiness, requires fresh approval. Admin edits preserve approval,
+and all updates use the current `revision`.
+
+An upcoming application can save its future address without launching it:
+
+```json
+{
+  "project": "example-budget",
+  "slug": "example-budget",
+  "description": "Личный и семейный бюджет. Приложение ещё не опубликовано.",
+  "readiness": "planning",
+  "routing": { "mode": "redirect", "target": "https://budget.example.org/" }
+}
+```
+
+Use an administrator's web session at `/dev/panel/new` for immediate publication
+of the card, or submit a pending API request for later review. Creating through
+either path issues a one-time service token: handle it only in the owner's
+approved credential workflow, never in documentation, command output or screenshots.
+The service token is not required for managing the record through the web panel.
+
+Readiness checks apply to the registry gateway when that gateway is enabled.
+They do not change independently deployed legacy nginx routes. Saving metadata
+does not change DNS/TLS, create containers, activate `PROJECT_ROUTING_ENABLED`,
+or provision PR stands. Application publication remains a separate deployment step.
+
 ## Publishing and routing
 
 The panel and API accept `routing: {"mode": "docker", "target": "app-container:8080"}`
