@@ -277,6 +277,15 @@ class Publisher:
             changes[self.site] = wrapper
             self.switch(changes)
 
+    def check_routing(self, target):
+        # Validate the future wildcard servers without changing active files or reloading.
+        with self.locked():
+            config = with_registry_gateway((self.directory / f"{target}.conf").read_text(), target)
+            with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", prefix="itzephir-routing-") as candidate:
+                candidate.write("events {}\nhttp {\n" + config + "\n}\n")
+                candidate.flush()
+                self.runner(["nginx", "-t", "-c", candidate.name])
+
     def publish(self, target, release, source):
         config = without_project_gateway(source.read_text())
         validate_environment(config, target)
@@ -311,6 +320,9 @@ def main(args):
     if os.geteuid() != 0:
         raise PermissionError("Run through the configured sudo command")
     publisher = Publisher()
+    if len(args) == 2 and args[0] == "--check-routing" and args[1] in DOMAINS:
+        publisher.check_routing(args[1])
+        return
     if args == ["--projects"]:
         with publisher.locked():
             publisher.switch({publisher.directory / f"{target}.conf": with_project_gateway((publisher.directory / f"{target}.conf").read_text(), target).encode() for target in DOMAINS})
