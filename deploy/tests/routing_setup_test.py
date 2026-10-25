@@ -71,6 +71,7 @@ elif name == "certbot":
         stop()
     if args[0] == "renew":
         assert "--dry-run" in args and "--cert-name" in args
+        assert "--no-random-sleep-on-renew" in args
         stop(1 if os.getenv("FAIL_RENEWAL") else 0)
 elif name == "nginx":
     if args == ["-V"]: print("--with-http_auth_request_module")

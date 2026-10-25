@@ -231,7 +231,9 @@ On the VM, `deploy/prepare-project-routing.sh` serializes provisioning and:
    It uses `certbot certonly --keep-until-expiring`; nginx configuration and the
    existing root-domain certificate are not rewritten by Certbot.
 3. Tests the saved renewal configuration with `certbot renew --cert-name …
-   --dry-run`, then enables the existing `certbot.timer`. Renewals run on the VM;
+   --dry-run --no-random-sleep-on-renew`, then enables the existing `certbot.timer`.
+   The explicit CI check skips Certbot's random startup delay; normal timer-driven
+   renewals keep their default scheduling. Renewals run on the VM;
    they do not depend on a scheduled GitHub workflow. A deploy hook takes the
    shared nginx lock, runs `nginx -t`, and reloads nginx only after success.
 4. Prepares the stand's managed Docker network and restricted CoreDNS container,
@@ -253,7 +255,12 @@ The Python hook uses Timeweb API v1 directly, matching
 It permits only `_acme-challenge.itzephir.com` and
 `_acme-challenge.dev.itzephir.com`, waits for every authoritative server plus a
 recursive resolver, and removes only the exact TXT record ID created by its auth
-invocation. Existing TXT/SPF/MX/A records and concurrent validations are preserved.
+invocation. It waits up to 20 minutes for each challenge and queries the recursive
+TXT cache only after every authoritative server has the new validation. This
+avoids caching an old wildcard TXT while Timeweb is still synchronizing its DNS
+servers, and allows an already cached response to expire. The workflow has a
+60-minute budget for issuance and the renewal check. Existing TXT/SPF/MX/A records
+and concurrent validations are preserved.
 An interrupted process before cleanup can leave a stale challenge TXT; remove
 only that recorded validation after checking that no issuance is in progress.
 

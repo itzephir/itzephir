@@ -87,7 +87,7 @@ def dig(server, host, kind):
     return set(result.stdout.strip().splitlines())
 
 
-def wait_for_dns(subdomain, validation, timeout=600, query=dig, sleep=time.sleep, clock=time.monotonic):
+def wait_for_dns(subdomain, validation, timeout=1200, query=dig, sleep=time.sleep, clock=time.monotonic):
     deadline = clock() + timeout
     hostname = subdomain + "." + ZONE
     # Check every authoritative server and a recursive resolver, including negative-cache expiry.
@@ -95,7 +95,10 @@ def wait_for_dns(subdomain, validation, timeout=600, query=dig, sleep=time.sleep
     if not servers or any(not re.fullmatch(r"[A-Za-z0-9.-]+\.?", name) for name in servers):
         raise RuntimeError("Cannot discover authoritative DNS servers")
     while clock() < deadline:
-        if all('"' + validation + '"' in query(server, hostname, "TXT") for server in sorted(servers | {"1.1.1.1"})):
+        # Do not prime the recursive cache with an old wildcard TXT while the
+        # provider is still synchronizing its authoritative servers.
+        authoritative_ready = all('"' + validation + '"' in query(server, hostname, "TXT") for server in sorted(servers))
+        if authoritative_ready and '"' + validation + '"' in query("1.1.1.1", hostname, "TXT"):
             return
         sleep(5)
     raise RuntimeError("Timed out waiting for the ACME TXT record on authoritative and recursive DNS")
