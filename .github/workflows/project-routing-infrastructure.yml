@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Environment with DNS and wildcard certificate already configured
+        description: Environment to prepare (wildcard DNS must already point to the VM)
         type: choice
         required: true
         options: [dev, prod]
@@ -16,7 +16,7 @@ jobs:
   prepare:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 40
     environment: infrastructure
     concurrency:
       group: itzephir-project-routing-infrastructure
@@ -25,23 +25,44 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - name: Prepare DNS bridge and restricted nginx publisher from this commit
+      - name: Provision wildcard TLS, Docker DNS and nginx publisher from this commit
         env:
           INFRA_SSH_KEY: ${{ secrets.INFRA_SSH_KEY }}
+          TIMEWEB_DNS_TOKEN: ${{ secrets.TIMEWEB_DNS_TOKEN }}
+          ACME_EMAIL: ${{ vars.ACME_EMAIL }}
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           TARGET: ${{ inputs.target }}
         run: |
           set -euo pipefail
+          for setting in INFRA_SSH_KEY TIMEWEB_DNS_TOKEN DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
+            [[ -n "${!setting}" ]] || { echo "Missing infrastructure setting: $setting" >&2; exit 1; }
+          done
+          [[ "$TARGET" == dev || "$TARGET" == prod ]]
+          # Validate the SSH destination before passing it to ssh/scp or a cleanup trap.
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          umask 077
           work="$(mktemp -d)"
-          trap 'rm -rf "$work"' EXIT
+          remote="/tmp/itzephir-routing-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          ssh_args=(-i "$work/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2)
+          cleanup() {
+            ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "rm -rf -- '$remote'" >/dev/null 2>&1 || true
+            rm -rf -- "$work"
+          }
+          trap cleanup EXIT
           printf '%s\n' "$INFRA_SSH_KEY" > "$work/key"
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
-          chmod 600 "$work/key" "$work/known_hosts"
-          tar -czf "$work/routing.tar.gz" deploy/setup-project-routing.sh deploy/apply-nginx.py
-          remote="/tmp/itzephir-routing-$GITHUB_SHA-$GITHUB_RUN_ID"
-          ssh_args=(-i "$work/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2)
+          printf '%s' "$TIMEWEB_DNS_TOKEN" > "$work/token"
+          printf '%s' "$ACME_EMAIL" > "$work/acme-email"
+          tar -czf "$work/routing.tar.gz" deploy/prepare-project-routing.sh deploy/setup-project-certificates.sh \
+            deploy/timeweb-dns-hook.py deploy/renew-project-certificate.sh deploy/setup-project-routing.sh deploy/apply-nginx.py
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
-          scp "${ssh_args[@]}" "$work/routing.tar.gz" "root@$DEPLOY_HOST:$remote/routing.tar.gz"
+          scp "${ssh_args[@]}" "$work/routing.tar.gz" "$work/token" "$work/acme-email" "root@$DEPLOY_HOST:$remote/"
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" \
-            "tar -xzf '$remote/routing.tar.gz' -C '$remote' && bash '$remote/deploy/setup-project-routing.sh' '$TARGET'"
+            "set -eu; chmod 600 '$remote/token'; tar -xzf '$remote/routing.tar.gz' -C '$remote'; export ACME_EMAIL=\$(cat '$remote/acme-email'); bash '$remote/deploy/prepare-project-routing.sh' '$TARGET' '$remote/token'"
+          {
+            echo "### Project routing infrastructure: $TARGET"
+            echo 'Wildcard certificate issued; staging renewal checked; certbot.timer enabled.'
+            echo 'Managed Docker network/DNS ready; nginx publisher installed and nginx -t passed.'
+            echo 'Prepare both environments before enabling PROJECT_ROUTING_ENABLED and deploying normally.'
+          } >> "$GITHUB_STEP_SUMMARY"

@@ -112,8 +112,8 @@ or frontend production toolchain are required by the portfolio. Node/Chrome
 are used only by CI browser tests. The existing Let's Encrypt webroot challenge
 at `/var/www/letsencrypt` remains in place.
 
-DNS remains `@` and `dev` A records at `194.87.190.245`, and `www` as a CNAME
-to `itzephir.com`.
+The portfolio keeps `@` and `dev` A records at `194.87.190.245`, and `www` as a
+CNAME to `itzephir.com`. Project wildcard records are described below.
 
 ## Releases and rollback
 
@@ -192,36 +192,95 @@ repository variable `PROJECT_ROUTING_ENABLED` is `true`. No DNS, certificates or
 VM configuration are changed by the routing PR. Preview can show and test the new
 forms before public subdomains exist.
 
-Prepare the following separately before enabling the variable:
+Wildcard DNS is configured at Timeweb: `*.itzephir.com` and
+`*.dev.itzephir.com` point to `194.87.190.245` (TTL 300). Keep the existing root,
+www, dev and mail records; do not publish AAAA unless the VM supports IPv6.
 
-1. In the DNS provider, add `*.itzephir.com` and `*.dev.itzephir.com` A records
-   pointing to the same VM as `itzephir.com`. Keep the existing root, www and dev
-   records. Do not publish AAAA records unless IPv6 is configured on the VM.
-2. Issue and configure automatic renewal of two wildcard certificates via DNS-01:
-   `*.itzephir.com` in `/etc/letsencrypt/live/itzephir-projects-prod/` and
-   `*.dev.itzephir.com` in `/etc/letsencrypt/live/itzephir-projects-dev/`.
-   Each directory needs `fullchain.pem` and `privkey.pem`. Configure nginx reload
-   after renewal. The existing root-domain certificate stays in use for the
-   portfolio/panel. Timeweb DNS automation and certificate issuance are separate
-   infrastructure work; this PR does not install a provider plugin or credentials.
-3. Prepare the GitHub `infrastructure` environment with a dedicated
-   `INFRA_SSH_KEY` for root provisioning, and the existing deployment host/known
-   hosts settings. Review the merged commit, then run **Prepare project routing
-   infrastructure** from `main`, once for `dev` and once for `prod`. The VM needs
-   Docker, nginx with `http_auth_request`, OpenSSL and `dig` (`dnsutils`).
-4. Connect each project container to **only its stand's** user-defined network:
-   `itzephir-projects-dev` or `itzephir-projects-prod`. Put this network membership
-   and a stable alias in that project's committed deployment configuration.
-   Use the alias and internal application port in the panel, e.g. `minor-web:8080`.
-   Docker ports do not need to be published. For services already on the VM,
-   select proxy and use a loopback address/port.
-5. After **both stands** are prepared, set repository variable
-   `PROJECT_ROUTING_ENABLED=true` and run normal application CI. New releases
-   package `nginx/enable-project-routing`. The activation script checks publisher
-   version 2 before switching releases; missing TLS files fail nginx validation
-   and trigger normal app/config rollback. Enabling the variable alone cannot
-   install the privileged helper. To disable routing, remove/set the variable to
-   false and deploy another release; that restores the legacy gateway.
+### Prepare TLS, Docker and nginx through CI
+
+After this change is merged, run **Prepare project routing infrastructure** from
+`main`, first for `dev`, then for `prod`. It is an explicit infrastructure job;
+ordinary PR checks and project approval never run provisioning. The job prepares
+the chosen environment and leaves route activation to normal website deployment.
+
+Configure the GitHub environment `infrastructure` with deployment restricted to
+`main` (and the desired reviewer protection):
+
+- `INFRA_SSH_KEY`: a dedicated root SSH key for provisioning, separate from the
+  restricted `deploy` account key. Install its public key through the VM owner.
+- `TIMEWEB_DNS_TOKEN`: a Timeweb Cloud API token permitted to list/create/delete
+  DNS records for `itzephir.com`. Use the narrowest permissions Timeweb supports.
+  Configure it as an environment secret; do not paste it into issues or commits.
+- Existing repository secrets `DEPLOY_HOST` and `DEPLOY_KNOWN_HOSTS` are reused.
+- Optional environment variable `ACME_EMAIL`: contact for ACME registration on a
+  fresh VM. On this VM the script reuses the account from the existing
+  `/etc/letsencrypt/renewal/itzephir.com.conf`, so no new account is needed.
+
+The VM must already have Certbot, Python 3, OpenSSL, `dig` (`dnsutils`), `flock`,
+Docker and systemd, plus nginx with `http_auth_request`. The workflow fails on
+missing settings before connecting. It uploads the scripts from that exact main
+commit and a private token file into a root-only temporary directory; an exit
+trap removes the remote and runner copies after success or failure.
+
+On the VM, `deploy/prepare-project-routing.sh` serializes provisioning and:
+
+1. Checks the existing nginx configuration and Docker daemon before changes.
+2. Installs the committed DNS-01 auth/cleanup hooks, then obtains the selected
+   `*.itzephir.com` / `*.dev.itzephir.com` certificate under
+   `/etc/letsencrypt/live/itzephir-projects-prod/` / `itzephir-projects-dev/`.
+   It uses `certbot certonly --keep-until-expiring`; nginx configuration and the
+   existing root-domain certificate are not rewritten by Certbot.
+3. Tests the saved renewal configuration with `certbot renew --cert-name …
+   --dry-run`, then enables the existing `certbot.timer`. Renewals run on the VM;
+   they do not depend on a scheduled GitHub workflow. A deploy hook takes the
+   shared nginx lock, runs `nginx -t`, and reloads nginx only after success.
+4. Prepares the stand's managed Docker network and restricted CoreDNS container,
+   checks Docker name resolution over UDP and TCP, and atomically installs the
+   version 2 nginx publisher. A failed DNS replacement restores its previous
+   container and Corefile. An existing unlabelled/foreign network or container is
+   rejected instead of being adopted or removed.
+5. Runs the publisher's `--check-routing dev|prod`: renders the future wildcard
+   nginx servers into a temporary standalone configuration and checks it with
+   `nginx -t`. Active files stay intact, including on validation failure. It then
+   checks the current nginx configuration again; the website is not restarted
+   and routing is not enabled.
+
+The root-only `/etc/itzephir/timeweb-dns.token` (mode `0600`) remains on the VM for
+unattended renewal. Updating the environment secret and rerunning provisioning
+rotates that credential; failed issuance/renewal checks restore the previous token.
+The Python hook uses Timeweb API v1 directly, matching
+`twc`'s TXT operation; it needs no CLI profile or third-party Python packages.
+It permits only `_acme-challenge.itzephir.com` and
+`_acme-challenge.dev.itzephir.com`, waits for every authoritative server plus a
+recursive resolver, and removes only the exact TXT record ID created by its auth
+invocation. Existing TXT/SPF/MX/A records and concurrent validations are preserved.
+An interrupted process before cleanup can leave a stale challenge TXT; remove
+only that recorded validation after checking that no issuance is in progress.
+
+The isolated provisioning tests use fake ACME, Docker and systemd commands with
+real root filesystem permissions, shell scripts and OpenSSL. PR CI never requests
+real certificates or changes DNS. The existing nginx/TLS/WebSocket integration
+suite tests generated routing separately.
+
+References: [Certbot manual hooks and renewal](https://eff-certbot.readthedocs.io/en/stable/using.html#pre-and-post-validation-hooks),
+[Timeweb API](https://timeweb.cloud/api-docs).
+
+### Activate project routing
+
+1. Connect each project container to **only its stand's** network:
+   `itzephir-projects-dev` or `itzephir-projects-prod`. Commit the membership and
+   stable alias in the project's deployment configuration. Use that alias and
+   internal port in the panel, e.g. `minor-web:8080`; no published Docker port is
+   needed. For host services, select proxy with a loopback address/port.
+2. After both infrastructure runs succeed, set repository variable
+   `PROJECT_ROUTING_ENABLED=true`, then perform normal website deployments for
+   preview and production. This packages `nginx/enable-project-routing`; the
+   publisher applies each environment's nginx configuration atomically with
+   validation and rollback. It does not create a separate nginx file per project.
+3. Verify the site, `/dev`, `/dev/panel`, and an approved running project's
+   subdomain/entry URL on each stand. Planning projects keep their card without a
+   launch link. Roll back by setting the variable to false and redeploying; TLS
+   files and Docker networks may remain available for a later activation.
 
 The committed setup script verifies the wildcard certificate and starts one
 restricted CoreDNS container per environment, pinned by image digest. It forwards
