@@ -80,6 +80,11 @@ jobs:
       - name: Check infrastructure provisioning, nginx and rollback
         run: python3 -m unittest discover -s deploy/tests -p '*_test.py'
 
+      - name: Check certificate and Docker provisioning in an isolated root container
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
+            'apk add --no-cache bash python3 openssl util-linux >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_ROUTING_REQUIRE_PROVISION_TESTS=true python3 -m unittest discover -s deploy/tests -p routing_setup_test.py'
+
       - name: Check project badge through real public nginx and project gateway
         run: |
           docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \

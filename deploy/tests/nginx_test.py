@@ -110,6 +110,26 @@ class NginxPublishingTest(unittest.TestCase):
         self.assertIn("proxy_pass http://127.0.0.1:18101;", dev)
         self.assertIn("location ^~ /dev/project/", dev)
 
+    def test_routing_preflight_checks_generated_tls_without_publishing_or_reloading(self):
+        self.bootstrap()
+        before = {path.name: path.read_bytes() for path in self.publisher.directory.iterdir()}
+        checked = []
+        def runner(command):
+            checked.append(command)
+            candidate = Path(command[-1])
+            config = candidate.read_text()
+            self.assertIn("itzephir-projects-dev/fullchain.pem", config)
+            self.assertIn("auth_request /_locator_resolve;", config)
+            self.assertIn("events {}", config)
+            raise subprocess.CalledProcessError(1, command)
+        self.publisher.runner = runner
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publisher.check_routing("dev")
+        self.assertEqual({path.name: path.read_bytes() for path in self.publisher.directory.iterdir()}, before)
+        self.assertEqual(len(checked), 1)
+        self.assertEqual(checked[0][:3], ["nginx", "-t", "-c"])
+        self.assertFalse(Path(checked[0][-1]).exists())
+
     def test_cross_environment_backends_includes_and_top_level_directives_are_rejected(self):
         dev = (DEPLOY / "nginx/dev.conf").read_text()
         configs = [
