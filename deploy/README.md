@@ -258,7 +258,12 @@ An interrupted process before cleanup can leave a stale challenge TXT; remove
 only that recorded validation after checking that no issuance is in progress.
 
 The isolated provisioning tests use fake ACME, Docker and systemd commands with
-real root filesystem permissions, shell scripts and OpenSSL. PR CI never requests
+real root filesystem permissions, shell scripts and OpenSSL. A separate test runs
+the actual pinned CoreDNS image with the same launch function/Corefile and checks
+Docker name resolution over both UDP and TCP. The container retains only
+`NET_BIND_SERVICE` in its capability bounding set because the official binary
+carries that file capability; non-root execution, read-only filesystem and
+`no-new-privileges` remain enabled. PR CI never requests
 real certificates or changes DNS. The existing nginx/TLS/WebSocket integration
 suite tests generated routing separately.
 

@@ -143,6 +143,7 @@ class RoutingSetupTest(unittest.TestCase):
         self.assertTrue(any(call[0] == "dig" and "+tcp" in call for call in state["calls"]))
         docker_runs = [call for call in state["calls"] if call[:2] == ["docker", "run"]]
         self.assertTrue(all("--read-only" in call and "--cap-drop" in call for call in docker_runs))
+        self.assertTrue(all(call[call.index("--cap-add") + 1] == "NET_BIND_SERVICE" for call in docker_runs))
         self.assertTrue(all(any(value.startswith("127.0.0.1:1855") for value in call) for call in docker_runs))
         self.assertIn(["systemctl", "enable", "--now", "certbot.timer"], state["calls"])
         self.assertTrue(any(call[:3] == ["nginx", "-t", "-c"] for call in state["calls"]))
