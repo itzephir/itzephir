@@ -55,7 +55,8 @@ jobs:
           printf '%s' "$TIMEWEB_DNS_TOKEN" > "$work/token"
           printf '%s' "$ACME_EMAIL" > "$work/acme-email"
           tar -czf "$work/routing.tar.gz" deploy/prepare-project-routing.sh deploy/setup-project-certificates.sh \
-            deploy/timeweb-dns-hook.py deploy/renew-project-certificate.sh deploy/setup-project-routing.sh deploy/apply-nginx.py
+            deploy/timeweb-dns-hook.py deploy/renew-project-certificate.sh deploy/setup-project-routing.sh deploy/apply-nginx.py \
+            deploy/project-dns-container.sh deploy/coredns/Corefile
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
           scp "${ssh_args[@]}" "$work/routing.tar.gz" "$work/token" "$work/acme-email" "root@$DEPLOY_HOST:$remote/"
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" \

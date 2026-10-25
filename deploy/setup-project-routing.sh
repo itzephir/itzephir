@@ -9,6 +9,7 @@ case "$target" in
     *) echo 'Invalid environment' >&2; exit 1 ;;
 esac
 cd "$(dirname "$0")"
+source ./project-dns-container.sh
 certificate="/etc/letsencrypt/live/itzephir-projects-$target/fullchain.pem"
 test -s "$certificate"
 test -s "/etc/letsencrypt/live/itzephir-projects-$target/privkey.pem"
@@ -23,8 +24,7 @@ container="itzephir-project-dns-$target"
 candidate="$container-next"
 backup="$container-previous"
 # CoreDNS v1.14.7, official multi-platform manifest. The website never accesses docker.sock.
-image='coredns/coredns@sha256:7efd3c635b03efd68c4e8398fc45f0d993d0e9ab016f72c1cefb0fd6d01aa286'
-docker pull "$image"
+docker pull "$PROJECT_DNS_IMAGE"
 if docker network inspect "$network" >/dev/null 2>&1; then
     [[ "$(docker network inspect --format '{{index .Labels "com.itzephir.project-network"}}' "$network")" == "$target" ]] || {
         echo "Refusing to use an unmanaged project network: $network" >&2; exit 1;
@@ -71,25 +71,14 @@ restore() {
 trap restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-cat > "$directory/Corefile.next" <<'COREDNS'
-.:1053 {
-    errors
-    cache 5
-    forward . 127.0.0.11
-}
-COREDNS
-chmod 644 "$directory/Corefile.next"
+install -m 644 coredns/Corefile "$directory/Corefile.next"
 mv "$directory/Corefile.next" "$directory/Corefile"
 docker rm -f "$candidate" >/dev/null 2>&1 || true
 if docker inspect "$container" >/dev/null 2>&1; then
     previous=true
     docker stop "$container" >/dev/null
 fi
-docker run -d --name "$candidate" --label "com.itzephir.project-dns=$target" \
-    --network "$network" --restart unless-stopped --read-only --cap-drop ALL \
-    --security-opt no-new-privileges --user 65532:65532 --memory 64m --pids-limit 64 \
-    -p "127.0.0.1:$dns_port:1053/udp" -p "127.0.0.1:$dns_port:1053/tcp" \
-    -v "$directory:/config:ro" "$image" -conf /config/Corefile >/dev/null
+start_project_dns "$target" "$candidate" "$network" "$dns_port" "$directory" >/dev/null
 for transport in udp tcp; do
     ready=false
     extra=()
