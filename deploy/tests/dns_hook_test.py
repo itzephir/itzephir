@@ -116,6 +116,35 @@ class DNSHookTest(unittest.TestCase):
         self.assertEqual(list(api.records()), [{"id": 1}, {"id": 2}])
         self.assertEqual(api.pages, ["?limit=100&offset=0", "?limit=100&offset=1"])
 
+    def test_slow_authority_does_not_prime_recursive_cache_with_previous_record(self):
+        elapsed = [0]
+        cached_until = [0]
+        recursive_queries = []
+        def sleep(seconds): elapsed[0] += seconds
+        def query(server, host, kind):
+            if kind == "NS": return {"ns1.timeweb.ru.", "ns3.timeweb.org."}
+            if server == "1.1.1.1":
+                recursive_queries.append(elapsed[0])
+                if elapsed[0] < 120 and cached_until[0] <= elapsed[0]:
+                    cached_until[0] = elapsed[0] + 600
+                if elapsed[0] < cached_until[0]:
+                    return {'"v=spf1 include:_spf.timeweb.ru ~all"'}
+            if server == "ns3.timeweb.org." and elapsed[0] < 120: return set()
+            return {'"' + VALUE + '"'}
+        hook.wait_for_dns("_acme-challenge.dev", VALUE, query=query, sleep=sleep, clock=lambda: elapsed[0])
+        self.assertEqual(elapsed[0], 120)
+        self.assertEqual(recursive_queries, [120])
+
+    def test_existing_recursive_cache_can_expire_after_the_original_ten_minute_limit(self):
+        elapsed = [0]
+        def sleep(seconds): elapsed[0] += seconds
+        def query(server, host, kind):
+            if kind == "NS": return {"ns1.timeweb.ru."}
+            if elapsed[0] < (900 if server == "1.1.1.1" else 420): return set()
+            return {'"' + VALUE + '"'}
+        hook.wait_for_dns("_acme-challenge", VALUE, query=query, sleep=sleep, clock=lambda: elapsed[0])
+        self.assertEqual(elapsed[0], 900)
+
     def test_propagation_waits_for_every_authoritative_server_and_recursive_cache(self):
         elapsed = [0]
         calls = []

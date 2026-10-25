@@ -72,7 +72,7 @@ certificate="/etc/letsencrypt/live/itzephir-projects-$target/fullchain.pem"
 openssl x509 -in "$certificate" -noout -checkend 86400 >/dev/null
 openssl x509 -in "$certificate" -noout -checkhost "routing-probe.$domain" | grep -q 'does match certificate'
 # Exercise the saved renewal hooks against the staging CA; this does not replace the live cert.
-certbot renew --cert-name "itzephir-projects-$target" --dry-run \
+certbot renew --cert-name "itzephir-projects-$target" --dry-run --no-random-sleep-on-renew \
     --server https://acme-staging-v02.api.letsencrypt.org/directory
 systemctl enable --now certbot.timer
 trap - EXIT INT TERM
