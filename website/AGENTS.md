@@ -12,7 +12,8 @@ architectural change with the ADR, Figma masters and verification updated togeth
 
 - Keep Ktor + kotlinx.html server rendering and the existing HTMX enhancement.
   Navigation, theme switching, tabs and webring must work without JavaScript.
-- `src/main/kotlin/com/itzephir/website/SiteShell.kt` alone owns shared chrome;
+- `src/main/kotlin/com/itzephir/website/SiteShell.kt` alone owns shared chrome,
+  including the footer after main content;
   `src/main/resources/static/site-shell.css` alone owns its selectors. Pages in
   `Portfolio.kt` supply main content, not shell markup or layout overrides.
 - Use the existing theme variables and self-hosted fonts/assets. Reference static
@@ -71,6 +72,9 @@ architectural change with the ADR, Figma masters and verification updated togeth
   welcome; a lone welcome tab has no close button.
 - Match the approved editor style and existing page components. A page-content
   change must not silently redesign the shared shell or mobile navigation.
+- Every page uses the shared footer: `~/itzephir` linking to `/`, Telegram,
+  GitHub and Email. Keep its markup in `SiteShell.kt` and selectors in
+  `site-shell.css`; do not add footers inside page content or locator views.
 
 ## Verification
 

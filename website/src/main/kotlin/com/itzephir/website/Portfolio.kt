@@ -43,9 +43,9 @@ data class PortfolioPage private constructor(
     }
 }
 
-private const val telegram = "https://t.me/ItzEphir"
+internal const val telegram = "https://t.me/ItzEphir"
 internal const val github = "https://github.com/itzephir"
-private const val email = "mailto:d.y.dvoryannikov@mail.ru"
+internal const val email = "mailto:d.y.dvoryannikov@mail.ru"
 private data class Project(val name: String, val description: String, val stack: String, val url: String)
 private val projects = listOf(
     Project("Photorus", "Микросервисы для Telegram WebApp: OCR, AI-разбор правил, SSE и MongoDB.", "Kotlin · Ktor · Docker", "$github/photorus-tgapp-backend"),
@@ -149,7 +149,6 @@ private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
         div { p { +"Открытая мастерская" }; p("muted") { +"Актуальные проекты в разработке" } }
         span("mono") { +"Открыть витрину" }
     }
-    siteFooter(true)
 }
 private fun FlowContent.shortcut(theme: Theme, number: String, url: String, filename: String, image: String, label: String, description: String, mobileDescription: String = description) {
     a(url, classes = "shortcut") {
@@ -191,7 +190,6 @@ private fun FlowContent.projectList(theme: Theme, page: PortfolioPage) {
             }
             contactCard(theme)
         }
-        siteFooter(false)
     }
 }
 private fun FlowContent.featuredProject(theme: Theme) {
@@ -239,21 +237,7 @@ private fun FlowContent.profile(theme: Theme, page: PortfolioPage) {
             ul("stack-list mono") { listOf("Kotlin", "Ktor", "Docker", "Linux", "CI/CD").forEach { li { +it } } }
             a("/projects", classes = "text-link") { +"Мои проекты" }
         }
-        contactCard(theme); siteFooter(false)
-    }
-}
-private fun FlowContent.siteFooter(home: Boolean) {
-    footer("site-footer content-width${if (home) " home-footer" else ""}") {
-        div("footer-main") {
-            a("/", classes = "mono muted footer-path") { +"~/itzephir" }
-            if (home) span("mono muted footer-summary") { +"infrastructure / own projects" }
-            nav("footer-links") {
-                attributes["aria-label"] = "Контакты"
-                externalLink(telegram, "contact-link") { +"Telegram" }; externalLink(github, "contact-link") { +"GitHub" }
-                a(email, classes = "contact-link") { +"Email" }
-            }
-        }
-        if (!home) p("footer-name muted") { +"Дмитрий Дворянников" }
+        contactCard(theme)
     }
 }
 internal fun FlowContent.icon(theme: Theme, name: String, size: Int, mobileName: String? = null) {

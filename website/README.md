@@ -117,10 +117,16 @@ page content, not the header layout.
 The fixed-width path beside the wordmark shows `/`, `/projects` or `/about`
 for the current page.
 
-The [accepted shell contract](architecture/site-shell.md) defines this as an
+The [accepted shell contract v2](architecture/site-shell.md) defines this as an
 architectural boundary. `SiteShell.kt` and `site-shell.css` own the shared shell;
 pages provide main content. CI checks its approved HTML structure, ownership,
 responsive geometry and navigation behavior before allowing deployment.
+
+The same shell supplies a footer on every page, including `/dev`, sign-in and
+the management panel: `~/itzephir` links to `/`, followed by Telegram, GitHub and
+Email. Its divider, width, spacing and 44 px link targets are shared across
+routes and themes. Footer markup belongs in `SiteShell.kt`, and its styles in
+`site-shell.css`; page renderers do not supply alternatives.
 
 The `/dev` gallery and `/dev/panel` management UI use the same shell. The public
 gallery shows approved registry projects; owners manage only assigned projects,

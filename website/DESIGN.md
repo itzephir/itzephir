@@ -22,6 +22,28 @@ parameters, close behavior and environment isolation.
 
 ## Portfolio screens
 
+### Shared footer v2
+
+[Workspace / Site footer](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=131-5359)
+is the shared footer for every site document, extending the shell contract to v2.
+Its masters are `131:5355` (dark desktop), `131:5356` (dark mobile),
+`131:5357` (light desktop), and `131:5358` (light mobile). All eight baseline
+screens and all 33 accepted Dev UI/catalog screens use linked instances;
+superseded content footers are hidden.
+
+The footer has a thin Workspace line divider, `~/itzephir` linking to `/` on the
+left, and Telegram, GitHub and Email on the right. It has no additional name or
+slogan. The path uses IBM Plex Mono 12/20; contacts use IBM Plex Sans 13/20.
+Links have 44 px targets. The centered row is 900 px on desktop and 342 px at
+390 px mobile width; the implementation uses fluid 32/24 px side insets and a
+900 px maximum. Divider-to-links spacing is 16 px; bottom insets are 32/24 px;
+contact gaps are 24/16 px, reducing to 12 px below 360 px.
+
+`SiteShell.kt` renders the footer after main content for portfolio, public `/dev`,
+sign-in, and authenticated panel documents. `site-shell.css` owns its styling.
+The [shell contract](architecture/site-shell.md) covers the fixed link order,
+home navigation without JavaScript, theme/route consistency and narrow screens.
+
 | Screen | Dark | Light |
 | --- | --- | --- |
 | Welcome desktop | `14:1898` | `14:2009` |

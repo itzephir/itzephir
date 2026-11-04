@@ -29,10 +29,12 @@ class SiteShellContractTest {
             // Exercise the real host renderer without database/auth fixtures; those have integration tests.
             val renderer = developmentRenderer(false) { WebringNeighbors() }
             routing { development.forEach { page -> get(page.path) {
-                renderer.render(call, LocatorPage("Dev", Identity("test-admin", IdentityRole.ADMIN), "test-csrf", HttpStatusCode.OK) { h1 { +"Dev content" } })
+                val actor = if (page == PortfolioPage.Development) null else Identity("test-admin", IdentityRole.ADMIN)
+                renderer.render(call, LocatorPage("Dev", actor, "test-csrf", HttpStatusCode.OK) { h1 { +"Dev content" } })
             } } }
         }
         val expected = assertNotNull(javaClass.getResource("/contracts/site-header.html")).readText().trim()
+        val expectedFooter = assertNotNull(javaClass.getResource("/contracts/site-footer.html")).readText().trim()
         for (page in PortfolioPage.entries + development) for (theme in Theme.entries) {
             for (mode in listOf("document", "fragment", "history")) for (tabs in listOf("", "welcome.projects.profile")) {
                 val response = client.get("${page.path}?theme=${theme.value}") {
@@ -45,13 +47,18 @@ class SiteShellContractTest {
                 val document = Jsoup.parse(response.bodyAsText())
                 val shell = document.select("#portfolio").single()
                 assertEquals("portfolio", shell.className(), context)
-                assertEquals("1", shell.attr("data-shell-contract"), context)
-                assertEquals(listOf("a", "header", "nav", "main"), shell.children().map { it.tagName() }, context)
+                assertEquals("2", shell.attr("data-shell-contract"), context)
+                assertEquals(listOf("a", "header", "nav", "main", "footer"), shell.children().map { it.tagName() }, context)
                 assertEquals("skip-link", shell.child(0).className(), context)
                 assertEquals("app-header", shell.child(1).className(), context)
                 assertEquals("editor-tabs mono", shell.child(2).className(), context)
                 assertEquals("content", shell.child(3).id(), context)
                 assertEquals(1, document.select(".app-header").size, context)
+                assertEquals(1, document.select("footer").size, context)
+                val footer = shell.child(4)
+                footer.ownerDocument()!!.outputSettings().prettyPrint(false)
+                footer.getAllElements().forEach { element -> element.textNodes().filter { it.isBlank }.forEach { it.remove() } }
+                assertEquals(expectedFooter, footer.outerHtml(), context)
                 assertEquals(page.path, shell.selectFirst(".workspace-label")!!.text(), context)
                 assertEquals("${page.path}?theme=${theme.opposite.value}", shell.selectFirst("#theme-toggle")!!.attr("href"), context)
                 assertEquals("${page.path}?theme=${theme.opposite.value}", shell.selectFirst("#theme-toggle")!!.attr("hx-get"), context)

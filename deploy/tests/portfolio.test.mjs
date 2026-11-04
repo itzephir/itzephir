@@ -6,6 +6,7 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
+import { assertSharedFooter } from './site-footer.mjs';
 
 async function headerGeometry(page) {
     await page.evaluate(() => document.fonts.ready);
@@ -23,7 +24,7 @@ async function assertShellDimensions(page, width) {
     const header = await box('.app-header');
     near(header.x, 0, 'Header left'); near(header.y, 0, 'Header top');
     near(header.height, mobile ? 69 : 60, 'Header height');
-    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '1');
+    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '2');
     assert.equal(await page.locator('.brand').isVisible(), !mobile);
     assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
     assert.equal(await page.locator('.workspace-label').isVisible(), width >= 1000);
@@ -51,7 +52,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
     const root = fileURLToPath(new URL('../..', import.meta.url));
     // Database-backed dev documents exercise the same shell in locator.test.mjs.
     const source = await readFile(resolve(root, 'website/src/main/kotlin/com/itzephir/website/Portfolio.kt'), 'utf8');
-    const registry = source.slice(source.indexOf('data class PortfolioPage'), source.indexOf('private const val telegram'));
+    const registry = source.slice(source.indexOf('data class PortfolioPage'), source.indexOf('internal const val telegram'));
     const routes = [...registry.matchAll(/^\s+val \w+ = PortfolioPage\("([^"]+)",/gm)].map(match => match[1]).filter(path => !path.startsWith('/dev'));
     assert.ok(routes.length >= 3 && routes.includes('/'), 'Portfolio page registry must be discoverable');
     const distribution = resolve(process.env.WEBSITE_DIST ?? resolve(root, 'website/build/install/website'));
@@ -116,6 +117,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         for (const width of [1440, 1000, 999, 768, 720, 719, 390, 320]) {
             await page.setViewportSize({ width, height: 1000 });
             let expectedHeader;
+            let expectedFooter;
             for (const theme of ['dark', 'light']) {
                 for (const path of routes) {
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
@@ -125,6 +127,9 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                     assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
                     expectedHeader ??= actualHeader;
                     assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
+                    const actualFooter = await assertSharedFooter(page);
+                    expectedFooter ??= actualFooter;
+                    assert.deepEqual(actualFooter, expectedFooter, `Footer changed: ${path} ${theme} ${width}px`);
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);
                 }
             }
@@ -283,6 +288,10 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         await plain.locator('.theme-toggle:visible').click();
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await plain.locator('.back-link').click();
+        assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
+        await plain.goto(`${base}/projects`);
+        await plain.locator('.footer-path').click();
+        assert.equal(new URL(plain.url()).pathname, '/');
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await plain.screenshot({ path: resolve(screenshots, 'no-js-390.png'), fullPage: true });
         await plain.setViewportSize({ width: 1440, height: 1000 });
