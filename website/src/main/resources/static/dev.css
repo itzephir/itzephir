@@ -1,8 +1,4 @@
 /* Dev UI v1: content only. Shared chrome belongs to site-shell.css. */
-.dev-portal { display:flex; align-items:center; justify-content:space-between; gap:20px; padding:20px 24px; border:1px solid var(--line); border-radius:10px; background:var(--side); }
-.dev-portal > div { display:grid; gap:4px; }
-.dev-portal .muted { font-size:13px; }
-.dev-portal > span { color:var(--accent); }
 .dev-public { display:flex; flex-direction:column; gap:32px; width:min(900px, calc(100% - 64px)); margin:56px auto 48px; min-width:0; }
 .dev-login { max-width:900px; }
 .dev-ui { --button:#e5eaf0; --button-ink:#191d21; }
@@ -85,6 +81,5 @@
     .dev-ui .row-actions { align-items:flex-start; }
     .dev-ui .project-row .badge { margin-left:0; }
     .dev-controls { display:flex; justify-content:space-between; align-items:center; min-height:44px; }
-    .dev-portal { flex-direction:column; align-items:flex-start; }
     .dev-ui .filters { gap:12px; font-size:13px; }
 }

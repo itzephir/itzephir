@@ -22,6 +22,20 @@ parameters, close behavior and environment isolation.
 
 ## Portfolio screens
 
+### Minimal welcome
+
+The welcome desktop/mobile frames in the table below use the same portrait,
+name, biography and editor shell, followed by four equal links: `projects/`,
+`about.md`, `contacts` and `dev/`. There is no greeting, role tagline, section
+counter, repeated call to action, link description, pinned project or separate
+workshop portal. Contacts retains its Telegram destination; `dev/` opens `/dev`.
+
+Links are 64 px high with IBM Plex Mono 14/24, Workspace panel/line/text tokens,
+12 px corners and 16 px gaps. Desktop uses four equal columns in a 900 px row;
+below 720 px the links stack at full content width. The portrait remains centered
+on desktop and shares a row with the theme control on mobile. The shared desktop
+app-bar masters `59:1687` / `59:1688` omit the decorative RU label in v2.
+
 ### Shared footer v2
 
 [Workspace / Site footer](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=131-5359)
@@ -38,6 +52,9 @@ Links have 44 px targets. The centered row is 900 px on desktop and 342 px at
 390 px mobile width; the implementation uses fluid 32/24 px side insets and a
 900 px maximum. Divider-to-links spacing is 16 px; bottom insets are 32/24 px;
 contact gaps are 24/16 px, reducing to 12 px below 360 px.
+While the staging badge is visible, the implementation reserves an 84/80 px
+bottom inset so the fixed notice cannot cover footer links. Dismissing the badge
+restores the ordinary desktop/mobile inset; production uses the ordinary inset.
 
 `SiteShell.kt` renders the footer after main content for portfolio, public `/dev`,
 sign-in, and authenticated panel documents. `site-shell.css` owns its styling.
@@ -128,11 +145,11 @@ conditional on provider configuration; password login is always the initial
 configured flow. Sample projects, usernames and masked tokens in Figma are
 illustrative; no credentials or actual service tokens are design assets.
 
-The portal from welcome to `/dev` is a content card, not a permanent editor
-tab. Dev documents join the same visited-tab cookie; project settings accept
-only registered UUID paths. The strip scrolls when many documents are open,
-preserving the app bar and 45 px strip height. The approved header HTML fixture
-and app bar geometry are unchanged.
+The welcome `dev/` shortcut is one of its four equal content links, rather than
+a permanent editor tab. Dev documents join the same visited-tab cookie;
+project settings accept only registered UUID paths. The strip scrolls when many
+documents are open, preserving the common app bar and 45 px strip height.
+The v2 app bar omits RU as described above; Dev content adds no header overrides.
 
 `LocatorPageRenderer` separates locator forms and permission checks from the
 website's document renderer. `Development.kt` supplies its content to

@@ -75,7 +75,10 @@ caches after updates; assets are cached for an hour.
 
 The implementation follows the approved [Figma baseline](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=14-3481):
 dark/light colors, desktop editor tabs, mobile content navigation, and the
-whole-name logo: connected `itz` + `ephir` in Quicksand Bold. The complete SVG
+whole-name logo: connected `itz` + `ephir` in Quicksand Bold. Welcome keeps the
+portrait, name and short biography, followed by four equal links: `projects/`,
+`about.md`, `contacts` (Telegram), and `dev/`. It has no greeting, section counters,
+link descriptions, pinned itzcast row or separate workshop portal. The complete SVG
 exports retain the outlined letters and optical spacing, and render in a
 32 px-high desktop slot. The short `itz` SVG and transparent 16/32 px favicon
 exports remain unchanged. Favicon variants follow browser color scheme so they
@@ -108,7 +111,8 @@ project/contact links open a new tab. Webring links remain same-tab navigation,
 with the registered `itzephir/prev`, ring index, and `itzephir/next` URLs.
 They are visible in the first viewport without JavaScript, including at 320 px.
 On mobile the three links have 44 px touch targets; the header has no brand or
-page tabs. Theme switching sits beside the greeting or Back link.
+page tabs. Theme switching sits beside the portrait or Back link. The decorative
+RU label is omitted from the shared desktop header.
 
 The header uses the same dimensions and control sizes on every route and in
 both themes. A stable scrollbar gutter prevents horizontal jumps between short

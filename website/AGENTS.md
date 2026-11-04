@@ -25,7 +25,8 @@ architectural change with the ADR, Figma masters and verification updated togeth
 
 - The header is one shared layout for the entire site. At the same viewport,
   opening, switching or closing a document must not move or resize the logo,
-  webring, language label, theme button or GitHub button.
+  webring, theme button or GitHub button. The decorative RU label was removed
+  in shell contract v2; do not restore it.
 - Only the path beside the wordmark changes with the current page:
   `/` on welcome, `/projects` on projects, `/about` on the profile. Derive it from
   `PortfolioPage.path`; do not restore `/workspace` or add a `/workspace` route.
@@ -34,10 +35,10 @@ architectural change with the ADR, Figma masters and verification updated togeth
 - Do not add page-specific header CSS, including different control sizes on
   welcome. Responsive rules must apply to all pages equally.
 - Current header height is 60 px at widths >= 720 px and 69 px below 720 px.
-  Desktop icon buttons have 44 x 44 px targets. At 720–999 px the path and
-  language label are hidden. Preserve these shared breakpoints when editing pages.
+  Desktop icon buttons have 44 x 44 px targets. At 720–999 px the path is
+  hidden. Preserve these shared breakpoints when editing pages.
 - Below 720 px the header contains only the webring. Do not add a mobile brand,
-  tab strip or page menu. Theme switching belongs beside the greeting or Back
+  tab strip or page menu. Theme switching belongs beside the portrait or Back
   control; page navigation uses content links and Back.
 
 ## Branding and webring
@@ -75,6 +76,9 @@ architectural change with the ADR, Figma masters and verification updated togeth
 - Every page uses the shared footer: `~/itzephir` linking to `/`, Telegram,
   GitHub and Email. Keep its markup in `SiteShell.kt` and selectors in
   `site-shell.css`; do not add footers inside page content or locator views.
+- Welcome uses four equal 64 px navigation links: `projects/`, `about.md`,
+  `contacts`, `dev/`. Keep their labels self-contained, without section counters,
+  repeated calls to action, descriptions, a pinned project or a separate portal.
 
 ## Verification
 

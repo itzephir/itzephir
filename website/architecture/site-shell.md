@@ -31,13 +31,17 @@ Version 2 moves the previously separate portfolio and public `/dev` footers into
 the shell. The `/dev` home label was a non-interactive span, and authenticated
 panel documents omitted the footer. One renderer now supplies the same four
 working links on every document, including HTMX responses and panel errors.
+The same revision removes the decorative RU label from the shared desktop app
+bar, matching the approved minimal welcome design. The webring, theme and GitHub
+controls keep their dimensions and order on every route.
 
 ## Invariants
 
-- The desktop app bar is 60 px high. Wordmark, webring, language, theme and GitHub
+- The desktop app bar is 60 px high. Wordmark, webring, theme and GitHub
   keep their order, alignment and dimensions. The wordmark slot is 89.36 x 32 px;
   buttons are 44 x 44 px; the ring is 344 x 36 px. Horizontal padding is 32 px
-  from 1000 px, and 24 px at 720–999 px, where path and language are hidden.
+  from 1000 px, and 24 px at 720–999 px, where the path is hidden. There is no
+  decorative language label.
   Paths longer than the fixed 11ch slot truncate to one line with an ellipsis;
   the full path remains the registered document URL. Many visited tabs scroll
   horizontally inside the unchanged 45 px strip rather than widening the page.
@@ -66,13 +70,17 @@ working links on every document, including HTMX responses and panel errors.
   desktop and 24 px below 720 px. All four links have 44 px targets and visible
   keyboard focus. Contact gaps are 24/16/12 px at desktop/mobile/below 360 px;
   the bottom inset is 32 px on desktop and 24 px on mobile.
+  A visible staging badge reserves 84/80 px plus the bottom safe area instead,
+  keeping all footer links clear of the fixed overlay. This is shared environment
+  state, not a route-specific layout.
 
 ## Executable contract
 
 `SiteShellContractTest` checks every registered `PortfolioPage`, both themes,
 document/fragment/history responses and empty/populated tab state against the
 approved HTML fixtures in `src/test/resources/contracts/site-header.html` and
-`site-footer.html`. The header fixture is unchanged by version 2.
+`site-footer.html`. The only header-fixture change in version 2 is removal of
+the RU span; links, control order and HTMX behavior remain protected.
 Only route, theme, asset digests and neighbor names are normalized. Control order,
 links, semantics and HTMX behavior remain frozen by the fixture.
 
