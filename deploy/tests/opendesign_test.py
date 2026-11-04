@@ -21,6 +21,7 @@ class Runner:
         self.owner = "opendesign"
         self.fail = None
         self.image = "official-image@sha256:candidate"
+        self.curl_statuses = []
 
     def __call__(self, args, **kwargs):
         self.calls.append(args)
@@ -45,8 +46,9 @@ class Runner:
                 config = Path(args[args.index("--config") + 1])
                 assert stat.S_IMODE(config.stat().st_mode) == 0o600
                 assert config.read_text().startswith('user = "open-design:')
-            else:
-                return "401"
+            if self.curl_statuses:
+                return self.curl_statuses.pop(0)
+            return "200" if "--config" in args else "401"
         return ""
 
 
@@ -121,6 +123,38 @@ class OpenDesignDeploymentTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "invalid existing"):
             self.deploy.activate("a" * 40)
         self.assertEqual(self.deploy.env.read_text(), "EXTERNAL_CONFIG=preserve\n")
+
+    def test_reload_can_briefly_serve_the_previous_404_before_auth_is_ready(self):
+        self.runner.curl_statuses = ["404", "401", "200", "401", "200"]
+        self.deploy.activate("a" * 40)
+        self.assertTrue(self.deploy.marker.exists())
+        self.assertEqual(self.runner.curl_statuses, [])
+        self.assertFalse(any(args[-1:] == ["down"] for args in self.runner.calls))
+
+    def test_unprotected_success_is_rejected_immediately_and_rolled_back(self):
+        self.runner.curl_statuses = ["200"]
+        with self.assertRaisesRegex(RuntimeError, "anonymous GET /: expected HTTP 401, received 200"):
+            self.deploy.activate("a" * 40)
+        self.assertEqual(sum(args[0] == "curl" for args in self.runner.calls), 1)
+        self.assertFalse(self.deploy.enabled.is_symlink())
+        self.assertFalse(self.deploy.marker.exists())
+
+    def test_readiness_timeout_reports_the_path_and_http_status_without_credentials(self):
+        self.deploy.directory.mkdir(parents=True)
+        token = self.deploy.prepare_credentials()
+        self.runner.curl_statuses = ["404", "404", "404"]
+        with self.assertRaisesRegex(RuntimeError, "not ready after 3 checks.*received 404") as error:
+            self.deploy.probe(token, attempts=3, delay=0)
+        self.assertNotIn(token, str(error.exception))
+        self.assertEqual(sum(args[0] == "curl" for args in self.runner.calls), 3)
+
+    def test_bad_authenticated_credentials_are_not_treated_as_a_reload_delay(self):
+        self.deploy.directory.mkdir(parents=True)
+        token = self.deploy.prepare_credentials()
+        self.runner.curl_statuses = ["401", "401"]
+        with self.assertRaisesRegex(RuntimeError, "authenticated GET /: expected HTTP 200, received 401"):
+            self.deploy.probe(token, attempts=3, delay=0)
+        self.assertEqual(sum(args[0] == "curl" for args in self.runner.calls), 2)
 
 
 if __name__ == "__main__":
