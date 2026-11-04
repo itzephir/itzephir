@@ -18,7 +18,8 @@ configure a model/provider in OpenDesign before using generation.
 record. The existing `itzephir-projects-prod` wildcard certificate covers it and
 retains its existing Certbot renewal. No DNS mutation or new certificate is
 needed. An exact nginx hostname takes precedence over the registry wildcard;
-this private tool does not need a public project-registry entry.
+this private tool does not need a public project-registry entry. The registry
+reserves `opendesign` so public projects cannot claim this infrastructure hostname.
 
 ## Delivery and access
 

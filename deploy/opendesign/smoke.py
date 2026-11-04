@@ -7,7 +7,7 @@ from urllib.request import Request, urlopen
 
 token = Path(sys.argv[1]).read_text().strip().split("=", 1)[1]
 authorization = "Basic " + base64.b64encode(f"open-design:{token}".encode()).decode()
-for path in ("/", "/api/health"):
+for path in ("/", "/api/health", "/api/projects"):
     request = Request("http://127.0.0.1:7456" + path, headers={
         "Authorization": authorization,
         "Origin": "https://opendesign.itzephir.com",
@@ -22,6 +22,7 @@ for path in ("/", "/api/health"):
     except HTTPError as error:
         assert error.code == 401, "Unexpected anonymous response"
     else:
-        # The proxy supplies the outer authentication boundary for static HTML.
-        assert path == "/", "The API must enforce the daemon token over Docker bridge networking"
+        # Upstream deliberately leaves health/readiness/version probes open.
+        # nginx supplies the authentication boundary for every public path.
+        assert path == "/api/health", "The editor and project API must enforce the daemon token"
 print("Pinned OpenDesign image serves its UI and authenticated API.")

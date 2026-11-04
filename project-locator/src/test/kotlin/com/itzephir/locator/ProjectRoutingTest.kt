@@ -20,9 +20,15 @@ class ProjectRoutingTest {
         listOf("https://itzephir.com", "https://dev.itzephir.com", "https://app.itzephir.com./", "https://example.org/?q=1", "https://example.org/#x").forEach {
             assertFailsWith<LocatorException>(it) { ProjectRouting(RoutingMode.PROXY, it).validate("safe") }
         }
-        listOf("under_score", "trailing-", "dev", "www", "a".repeat(64)).forEach {
+        listOf("under_score", "trailing-", "dev", "www", "opendesign", "a".repeat(64)).forEach {
             assertFailsWith<LocatorException>(it) { ProjectRouting(RoutingMode.DOCKER, "app:80").validate(it) }
         }
         assertEquals("http://app:80", ProjectRouting(RoutingMode.DOCKER, "app:80").upstream())
+    }
+
+    @Test fun `public projects cannot claim the private design workspace hostname`() {
+        assertFailsWith<LocatorException> {
+            ProjectRouting(RoutingMode.PROXY, "https://example.org").validate("opendesign")
+        }
     }
 }
