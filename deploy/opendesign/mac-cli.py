@@ -9,7 +9,6 @@ import sys
 
 DEFAULT_CONFIG = Path.home() / ".config/opendesign/remote.json"
 DEFAULTS = {
-    "ssh_target": "root@deployment-host.example.invalid",
     "container": "itzephir-opendesign",
     "daemon_url": "http://127.0.0.1:7456",
 }
@@ -25,8 +24,8 @@ Usage:
   opendesign help                  Official CLI help (requires deployment)
 
 Commands execute inside the VM's OpenDesign container over SSH. File paths
-refer to that container, not this Mac. The agent/model stays on your Mac;
-this entry point starts neither a local daemon nor a model on the VM.
+refer to that container, not this Mac. The coding agent runs on your Mac;
+this bridge starts neither a local daemon nor a server-side agent.
 
 Configuration: ~/.config/opendesign/remote.json
 SSH uses your existing key and requires a previously verified host key.
@@ -35,8 +34,13 @@ System /usr/bin/od is unchanged.
 
 
 def configuration(path=DEFAULT_CONFIG):
-    values = {**DEFAULTS, **(json.loads(path.read_text()) if path.exists() else {})}
-    if not isinstance(values["ssh_target"], str) or not re.fullmatch(
+    if not path.exists():
+        raise ValueError("Create the private remote.json with your SSH destination before connecting")
+    configured = json.loads(path.read_text())
+    if not isinstance(configured, dict):
+        raise ValueError("Remote configuration must be a JSON object")
+    values = {**DEFAULTS, **configured}
+    if not isinstance(values.get("ssh_target"), str) or not re.fullmatch(
             r"[A-Za-z0-9_][A-Za-z0-9_.-]*@[A-Za-z0-9][A-Za-z0-9.-]*", values["ssh_target"]):
         raise ValueError("ssh_target must be user@hostname")
     if not isinstance(values["container"], str) or not re.fullmatch(

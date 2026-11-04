@@ -8,3 +8,8 @@ build/
 local.properties
 node_modules/
 __pycache__/
+deploy/opendesign/remote.json
+deploy/opendesign/*.local.*
+.env
+.env.*
+!.env.example

@@ -115,8 +115,9 @@ or frontend production toolchain are required by the portfolio. Node/Chrome
 are used only by CI browser tests. The existing Let's Encrypt webroot challenge
 at `/var/www/letsencrypt` remains in place.
 
-The portfolio keeps `@` and `dev` A records at `deployment-host.example.invalid`, and `www` as a
-CNAME to `itzephir.com`. Project wildcard records are described below.
+The portfolio keeps `@` and `dev` A records pointing to the privately configured
+deployment host, and `www` as a CNAME to `itzephir.com`. Project wildcard records
+are described below. Keep host addresses and provider resource IDs out of Git.
 
 ## Releases and rollback
 
@@ -195,8 +196,8 @@ repository variable `PROJECT_ROUTING_ENABLED` is `true`. No DNS, certificates or
 VM configuration are changed by the routing PR. Preview can show and test the new
 forms before public subdomains exist.
 
-Wildcard DNS is configured at Timeweb: `*.itzephir.com` and
-`*.dev.itzephir.com` point to `deployment-host.example.invalid` (TTL 300). Keep the existing root,
+Wildcard DNS records `*.itzephir.com` and `*.dev.itzephir.com` must point to the
+privately configured deployment host. Keep the existing root,
 www, dev and mail records; do not publish AAAA unless the VM supports IPv6.
 
 ### Prepare TLS, Docker and nginx through CI

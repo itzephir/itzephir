@@ -11,6 +11,7 @@ import unittest
 spec = importlib.util.spec_from_file_location("opendesign_cli", Path(__file__).resolve().parents[1] / "opendesign/mac-cli.py")
 cli = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(cli)
+TEST_CONFIG = {**cli.DEFAULTS, "ssh_target": "operator@example.invalid"}
 
 
 class OpenDesignCliTests(unittest.TestCase):
@@ -27,7 +28,7 @@ else:
 """)
             docker.chmod(0o755)
             args = ["files", "write", "project", "a file.html", "--content", f"$(touch {marker}); 'quoted'\nnext line"]
-            command = cli.ssh_command(args, cli.DEFAULTS)
+            command = cli.ssh_command(args, TEST_CONFIG)
             result = subprocess.run(["/bin/sh", "-c", command[-1]], input='{"jsonrpc":"2.0"}\n',
                                     text=True, capture_output=True, env={**os.environ, "PATH": str(root)}, check=True)
             payload = json.loads(result.stdout)
@@ -44,7 +45,7 @@ else:
             docker = root / "docker"
             docker.write_text("#!/bin/sh\nexit 1\n")
             docker.chmod(0o755)
-            remote = cli.ssh_command(["mcp"], cli.DEFAULTS)[-1]
+            remote = cli.ssh_command(["mcp"], TEST_CONFIG)[-1]
             result = subprocess.run(["/bin/sh", "-c", remote], text=True, capture_output=True,
                                     env={**os.environ, "PATH": str(root)})
             self.assertEqual(result.returncode, 69)
@@ -56,6 +57,15 @@ else:
             config = Path(directory) / "remote.json"
             config.write_text(json.dumps({"ssh_target": "-oProxyCommand=bad"}))
             with self.assertRaises(ValueError):
+                cli.configuration(config)
+
+    def test_no_infrastructure_destination_is_embedded_as_a_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = Path(directory) / "remote.json"
+            with self.assertRaisesRegex(ValueError, "private remote.json"):
+                cli.configuration(config)
+            config.write_text("{}")
+            with self.assertRaisesRegex(ValueError, "user@hostname"):
                 cli.configuration(config)
 
 

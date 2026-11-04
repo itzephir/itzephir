@@ -31,6 +31,7 @@ jobs:
         run: |
           python3 -m unittest discover -s deploy/tests -p opendesign_test.py
           python3 -m unittest discover -s deploy/tests -p opendesign_cli_test.py
+          python3 -m unittest discover -s deploy/tests -p public_metadata_test.py
       - name: Check real nginx TLS, authentication, uploads and WebSockets
         run: |
           docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh alpine:3.23 -c \

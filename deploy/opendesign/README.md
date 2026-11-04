@@ -6,7 +6,9 @@ website are preserved; importing their design system is a separate next step.
 
 ## Placement and capacity
 
-The application host has capacity for the initial workspace; operator inventory is kept private.
+The existing application host has capacity for the initial single-user workspace.
+Keep its address, provider inventory, resource IDs and live capacity measurements
+in private operator configuration. None are needed in the public repository.
 
 The runtime is capped at 384 MiB RAM, a 192 MiB Node heap, 0.75 CPU and 256
 processes. No application build runs on the VM. Large exports and server-side
@@ -35,7 +37,7 @@ Open <https://opendesign.itzephir.com>. The browser's username is `open-design`.
 As the VM owner, retrieve the generated password in your own terminal:
 
 ```sh
-ssh root@deployment-host.example.invalid 'sed -n "s/^OD_API_TOKEN=//p" /etc/itzephir/opendesign.env'
+ssh "$INFRA_SSH_TARGET" 'sed -n "s/^OD_API_TOKEN=//p" /etc/itzephir/opendesign.env'
 ```
 
 The token is generated on the VM, preserved on retries, and never printed by CI.
@@ -55,6 +57,8 @@ local Node version change, model credential copy or second daemon is required.
 The system `/usr/bin/od` remains available. Its local configuration is
 `~/.config/opendesign/remote.json`; it contains only the SSH destination, container
 name and loopback URL, not a password or API token.
+The SSH destination must be supplied in that private local file; the command has
+no embedded host fallback. Do not commit this file or copy its contents into a PR.
 
 ```sh
 opendesign --help
@@ -103,7 +107,7 @@ records its source revision/image in `/srv/itzephir/opendesign/deployment.json`.
 Inspect status without printing secrets:
 
 ```sh
-ssh root@deployment-host.example.invalid 'docker ps --filter name=itzephir-opendesign; docker stats --no-stream itzephir-opendesign'
+ssh "$INFRA_SSH_TARGET" 'docker ps --filter name=itzephir-opendesign; docker stats --no-stream itzephir-opendesign'
 ```
 
 The website's services, PostgreSQL and other project containers are not restarted.
