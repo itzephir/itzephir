@@ -46,7 +46,7 @@ Below 720 px the portrait sits above the copy, with 24 px side insets, 32 px
 top/image-to-copy spacing and 40 px bottom padding. At 390 px its crop is
 342 × 280 px; at 320 px it is 272 × 240 px. Wider mobile crops grow up to
 420 px high. Copy groups have 24 px gaps; the name is 40/44, reducing to 32/38
-below 360 px, and the biography is 15/22. The mobile theme control sits beside
+below 375 px, and the biography is 15/22. The mobile theme control sits beside
 the name. The shared desktop app-bar masters `59:1687` / `59:1688` omit the
 decorative RU label in v2. Earlier centered welcome frames remain as history.
 
