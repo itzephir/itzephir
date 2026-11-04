@@ -78,7 +78,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
                 assert.equal(await admin.locator('.app-header').count(), 1);
                 assert.equal(await admin.locator('main#content').count(), 1);
                 assert.equal(await admin.locator('.workspace-label').textContent(), route);
-                const actual = await admin.locator('.app-header, .logo, .webring, .header-language, .desktop-theme, .header-github').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => {
+                const actual = await admin.locator('.app-header, .logo, .webring, .desktop-theme, .header-github').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => {
                     const r = n.getBoundingClientRect(); return [n.className, ...[r.x, r.y, r.width, r.height].map(v => Math.round(v * 100) / 100)];
                 }));
                 geometry ??= actual;
@@ -105,7 +105,9 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await admin.goto(panel);
         await admin.locator('article').filter({ hasText: pending.project.project }).getByRole('button', { name: 'Одобрить', exact: true }).click();
         const publicPage = await adminContext.newPage();
-        await publicPage.goto(`${base}/dev`);
+        await publicPage.goto(base);
+        await publicPage.locator('.shortcut[href="/dev"]').click();
+        assert.equal(new URL(publicPage.url()).pathname, '/dev');
         await assertSharedFooter(publicPage);
         await publicPage.locator('.footer-path').click();
         assert.equal(new URL(publicPage.url()).pathname, '/');

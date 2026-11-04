@@ -27,7 +27,11 @@ class ApplicationTest {
         assertEquals("dark", page.selectFirst("#portfolio")!!.attr("data-theme"))
         assertEquals("Дмитрий Дворянников", page.selectFirst("h1")!!.text())
         assertFalse(page.text().contains("ШМР"))
-        assertEquals(listOf("/projects", "/about", "https://t.me/ItzEphir"), page.select(".shortcut").map { it.attr("href") })
+        assertEquals(listOf("/projects", "/about", "https://t.me/ItzEphir", "/dev"), page.select(".shortcut").map { it.attr("href") })
+        assertEquals(listOf("projects/", "about.md", "contacts", "dev/"), page.select(".shortcut").map { it.text() })
+        for (removed in listOf("Привет!", "ОТКРЫТЬ В WORKSPACE", "Посмотреть проекты", "Познакомиться ближе", "Написать напрямую", "itzcast")) {
+            assertFalse(page.selectFirst("main")!!.text().contains(removed), removed)
+        }
         assertTrue(page.select("canvas").isEmpty())
         assertEquals(listOf("https://webring.otomir23.me/itzephir/prev", "https://webring.otomir23.me/", "https://webring.otomir23.me/itzephir/next"), page.select(".webring a").map { it.attr("href") })
         assertEquals(listOf("Previous from API", "webring", "Next from API"), page.select(".webring a").map { it.text() })

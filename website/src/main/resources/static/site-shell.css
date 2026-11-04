@@ -29,15 +29,16 @@ html { scrollbar-gutter: stable; }
 .footer-path, .footer-links a { display: inline-flex; align-items: center; min-height: 44px; }
 .footer-links { display: flex; align-items: center; gap: 24px; }
 .site-footer a:hover { color: var(--accent); text-decoration: underline; text-underline-offset: 4px; }
+html:has(#staging-badge) .site-footer { margin-bottom: calc(84px + env(safe-area-inset-bottom, 0px)); }
 
 @media (min-width: 720px) and (max-width: 999px) {
     .app-header, .editor-tabs { padding-left: 24px; padding-right: 24px; }
-    .workspace-label, .header-language { display: none; }
+    .workspace-label { display: none; }
     .header-actions { gap: 12px; }
 }
 
 @media (max-width: 719px) {
-    .brand, .header-language, .header-github, .desktop-theme, .editor-tabs { display: none; }
+    .brand, .header-github, .desktop-theme, .editor-tabs { display: none; }
     .app-header { height: 69px; padding: 12px 24px; border-bottom: 1px solid var(--line); }
     .header-actions { width: 100%; }
     .webring { width: 100%; height: 44px; }
@@ -47,6 +48,7 @@ html { scrollbar-gutter: stable; }
     .ring-index { flex-basis: 76px; }
     .webring .icon { --icon-size: 12px; }
     .site-footer { width: calc(100% - 48px); margin-bottom: 24px; }
+    html:has(#staging-badge) .site-footer { margin-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
     .footer-links { gap: 16px; }
 }
 

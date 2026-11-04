@@ -34,7 +34,6 @@ internal fun DIV.siteShell(
                     span { +neighbors.next }; icon(theme, "chevron-right", 16, "webring-right-mobile")
                 }
             }
-            span("mono muted header-language") { +"RU" }
             themeToggle(theme, page, false)
             externalLink(github, "icon-button header-github") { attributes["aria-label"] = "GitHub itzephir"; icon(theme, "github", 18) }
         }

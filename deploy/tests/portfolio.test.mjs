@@ -10,7 +10,7 @@ import { assertSharedFooter } from './site-footer.mjs';
 
 async function headerGeometry(page) {
     await page.evaluate(() => document.fonts.ready);
-    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .header-language, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
+    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
         elements.filter(element => element.getClientRects().length).map(element => {
             const { x, y, width, height } = element.getBoundingClientRect();
             return { element: element.classList[0], box: [x, y, width, height].map(value => Math.round(value * 100) / 100) };
@@ -28,7 +28,7 @@ async function assertShellDimensions(page, width) {
     assert.equal(await page.locator('.brand').isVisible(), !mobile);
     assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
     assert.equal(await page.locator('.workspace-label').isVisible(), width >= 1000);
-    assert.equal(await page.locator('.header-language').isVisible(), width >= 1000);
+    assert.equal(await page.locator('.header-language').count(), 0);
     for (const selector of ['.desktop-theme', '.header-github']) {
         assert.equal(await page.locator(selector).isVisible(), !mobile);
         if (!mobile) { const control = await box(selector); near(control.width, 44, `${selector} width`); near(control.height, 44, `${selector} height`); }
@@ -44,6 +44,28 @@ async function assertShellDimensions(page, width) {
         near(brand.height, 32, 'Brand height');
         near(tabs.y, 60, 'Tabs top'); near(tabs.height, 45, 'Tabs height');
     }
+}
+
+async function assertWelcomeNavigation(page, width) {
+    const links = page.locator('.shortcut');
+    assert.deepEqual(await links.allTextContents(), ['projects/', 'about.md', 'contacts', 'dev/']);
+    assert.deepEqual(await links.evaluateAll(nodes => nodes.map(n => n.getAttribute('href'))), ['/projects', '/about', 'https://t.me/ItzEphir', '/dev']);
+    const boxes = await links.evaluateAll(nodes => nodes.map(n => {
+        const r = n.getBoundingClientRect(), style = getComputedStyle(n);
+        return { x: r.x, y: r.y, w: r.width, h: r.height, font: style.fontFamily, size: style.fontSize };
+    }));
+    for (const box of boxes) {
+        assert.equal(box.h, 64);
+        assert.ok(Math.abs(box.w - boxes[0].w) < 0.03);
+        assert.ok(box.font.includes('IBM Plex Mono'));
+        assert.equal(box.size, '14px');
+    }
+    if (width >= 720) assert.ok(boxes.every(box => box.y === boxes[0].y), 'Desktop links share one row');
+    else for (let i = 1; i < boxes.length; i++) {
+        assert.equal(boxes[i].x, boxes[0].x);
+        assert.equal(boxes[i].y - boxes[i - 1].y, 80);
+    }
+    assert.equal(await page.locator('.greeting-title, .section-label, .pinned-project, .dev-portal').count(), 0);
 }
 
 test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
@@ -123,6 +145,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
                     const actualHeader = await headerGeometry(page);
                     await assertShellDimensions(page, width);
+                    if (path === '/') await assertWelcomeNavigation(page, width);
                     assert.equal(await page.locator('.workspace-label').textContent(), path);
                     assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
                     expectedHeader ??= actualHeader;
