@@ -22,19 +22,33 @@ parameters, close behavior and environment isolation.
 
 ## Portfolio screens
 
-### Minimal welcome
+### Portrait welcome
 
-The welcome desktop/mobile frames in the table below use the same portrait,
-name, biography and editor shell, followed by four equal links: `projects/`,
+The approved [portrait composition](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=138-5855)
+uses the user's original color photograph, name, biography and editor shell,
+with four equal links: `projects/`,
 `about.md`, `contacts` and `dev/`. There is no greeting, role tagline, section
 counter, repeated call to action, link description, pinned project or separate
 workshop portal. Contacts retains its Telegram destination; `dev/` opens `/dev`.
 
-Links are 64 px high with IBM Plex Mono 14/24, Workspace panel/line/text tokens,
-12 px corners and 16 px gaps. Desktop uses four equal columns in a 900 px row;
-below 720 px the links stack at full content width. The portrait remains centered
-on desktop and shares a row with the theme control on mobile. The shared desktop
-app-bar masters `59:1687` / `59:1688` omit the decorative RU label in v2.
+The centered desktop composition is 900 × 480 px: a 360 × 480 px portrait,
+48 px gap and a 492 px copy column. The left-aligned name uses IBM Plex Sans
+Medium 64/68, the biography 18/28, and the three copy groups have 32 px gaps.
+The portrait has 16 px corners and retains its original colors without filters.
+`portrait.jpg` is the user's 960 × 1280 px original, also imported into Figma.
+
+Links form a 2 × 2 grid at every width. Each is 64 px high with IBM Plex Mono
+14/24, Workspace panel/line/text tokens, 12 px corners and 16 px gaps. At
+720–999 px the composition remains horizontal with fluid image/copy columns,
+a 32 px gap and a 48/54 name.
+
+Below 720 px the portrait sits above the copy, with 24 px side insets, 32 px
+top/image-to-copy spacing and 40 px bottom padding. At 390 px its crop is
+342 × 280 px; at 320 px it is 272 × 240 px. Wider mobile crops grow up to
+420 px high. Copy groups have 24 px gaps; the name is 40/44, reducing to 32/38
+below 360 px, and the biography is 15/22. The mobile theme control sits beside
+the name. The shared desktop app-bar masters `59:1687` / `59:1688` omit the
+decorative RU label in v2. Earlier centered welcome frames remain as history.
 
 ### Shared footer v2
 
@@ -63,9 +77,10 @@ home navigation without JavaScript, theme/route consistency and narrow screens.
 
 | Screen | Dark | Light |
 | --- | --- | --- |
-| Welcome desktop | `14:1898` | `14:2009` |
+| Welcome desktop | `138:5855` | `138:6024` |
 | Projects desktop | `14:2734` | `14:2882` |
-| Welcome mobile | `14:3029` | `14:3254` |
+| Welcome mobile 390 | `138:6189` | `138:6287` |
+| Welcome mobile 320 | `138:6597` | `138:6667` |
 | Projects mobile | `14:3123` | `14:3346` |
 
 The approved full logo is the connected `itz` monogram followed by `ephir` in
@@ -84,8 +99,8 @@ unchanged. Use the short mark for icons, and the whole-name wordmark in desktop
 headers.
 
 Colors and content spacing are defined in `styles.css`; shared shell geometry
-is owned by `site-shell.css`. Icons and portrait are local
-exports from the same Figma screens. IBM Plex Sans/Mono include Cyrillic and are
+is owned by `site-shell.css`. Icons are local exports from the same Figma screens;
+the portrait uses the original photograph. IBM Plex Sans/Mono include Cyrillic and are
 self-hosted; font and icon license notices are under `third_party`.
 
 The implementation uses fluid widths and a 720 px breakpoint. The mobile header

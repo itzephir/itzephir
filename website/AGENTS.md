@@ -38,7 +38,7 @@ architectural change with the ADR, Figma masters and verification updated togeth
   Desktop icon buttons have 44 x 44 px targets. At 720–999 px the path is
   hidden. Preserve these shared breakpoints when editing pages.
 - Below 720 px the header contains only the webring. Do not add a mobile brand,
-  tab strip or page menu. Theme switching belongs beside the portrait or Back
+  tab strip or page menu. Theme switching belongs beside the name or Back
   control; page navigation uses content links and Back.
 
 ## Branding and webring
@@ -79,6 +79,9 @@ architectural change with the ADR, Figma masters and verification updated togeth
 - Welcome uses four equal 64 px navigation links: `projects/`, `about.md`,
   `contacts`, `dev/`. Keep their labels self-contained, without section counters,
   repeated calls to action, descriptions, a pinned project or a separate portal.
+- Welcome uses the approved large color portrait: beside the copy on desktop,
+  above it on mobile. Keep the navigation in a 2 × 2 grid and use the original
+  photo without desaturation. See `DESIGN.md` for source frames and dimensions.
 
 ## Verification
 
