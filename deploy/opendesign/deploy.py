@@ -19,6 +19,10 @@ VOLUME = "itzephir-opendesign-data"
 LABEL = "io.itzephir.service=opendesign"
 
 
+class ProbeNotReady(RuntimeError):
+    """The previous nginx workers or a starting upstream answered the probe."""
+
+
 def command(args, **kwargs):
     return subprocess.run(args, check=True, text=True, capture_output=True, **kwargs).stdout.strip()
 
@@ -90,17 +94,33 @@ class Deployment:
                   "--mount", f"type=bind,src={backup},dst=/backup",
                   image, "-ec", script])
 
-    def probe(self, token):
+    def probe(self, token, attempts=40, delay=0.25):
         with tempfile.NamedTemporaryFile(mode="w", dir=self.directory) as config:
             config.write(f'user = "open-design:{token}"\n')
             config.flush()
-            base = ["curl", "--silent", "--show-error", "--max-time", "15",
+            base = ["curl", "-q", "--silent", "--show-error", "--max-time", "5",
                     "--resolve", f"{HOST}:443:127.0.0.1"]
-            for path in ("/", "/api/health"):
-                status = self.run([*base, "--output", "/dev/null", "--write-out", "%{http_code}", f"https://{HOST}{path}"])
-                if status != "401":
-                    raise RuntimeError("OpenDesign must reject unauthenticated requests")
-                self.run([*base, "--config", config.name, "--fail", "--output", "/dev/null", f"https://{HOST}{path}"])
+            output = ["--output", "/dev/null", "--write-out", "%{http_code}"]
+            for attempt in range(attempts):
+                try:
+                    for path in ("/", "/api/health"):
+                        for authenticated, expected in ((False, "401"), (True, "200")):
+                            auth = ["--config", config.name] if authenticated else []
+                            status = self.run([*base, *auth, *output, f"https://{HOST}{path}"])
+                            if status != expected:
+                                mode = "authenticated" if authenticated else "anonymous"
+                                message = f"OpenDesign {mode} GET {path}: expected HTTP {expected}, received {status}"
+                                if status in {"404", "502", "503", "504"}:
+                                    raise ProbeNotReady(message)
+                                raise RuntimeError(message)
+                    if attempt:
+                        print(f"OpenDesign HTTPS readiness confirmed after {attempt + 1} checks.", flush=True)
+                    return
+                except ProbeNotReady as error:
+                    if attempt + 1 == attempts:
+                        raise RuntimeError(f"OpenDesign was not ready after {attempts} checks: {error}") from None
+                    # systemctl reload returns before nginx's new workers serve requests.
+                    time.sleep(delay)
 
     def activate(self, revision):
         self.run(["nginx", "-t"])

@@ -90,6 +90,11 @@ unmanaged configurations, checks the existing certificate/nginx configuration,
 pulls the pinned image before stopping the workspace, and serializes deployments.
 nginx changes share `/run/lock/itzephir-nginx.lock` with the portfolio publisher.
 Streaming responses, uploads and WebSocket upgrades pass through the proxy.
+After reloading nginx, readiness checks briefly retry transitional 404/502/503/504
+responses while the new workers take over. Activation requires anonymous requests
+to return 401 and authenticated requests to return 200 for both the UI and health
+endpoint. An anonymous 200 or rejected credentials fail immediately. Errors report
+only the request path and HTTP status, never the credential or response body.
 
 Update the explicit image tag **and digest** in `compose.yaml` in a new PR.
 Before replacing an existing workspace, deployment stops it and makes an offline
