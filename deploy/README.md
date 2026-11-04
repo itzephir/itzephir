@@ -1,5 +1,8 @@
 # Deployment
 
+The private OpenDesign workspace has an independent, committed deployment;
+see [opendesign/README.md](opendesign/README.md) for capacity, access and recovery.
+
 The website runs as two independent Ktor/JVM services on the existing VM.
 
 | Trigger | Release path | Service / port | Hostname |

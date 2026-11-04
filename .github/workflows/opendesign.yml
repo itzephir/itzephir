@@ -1,0 +1,101 @@
+name: OpenDesign hosting
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - deploy/opendesign/**
+      - deploy/tests/opendesign*
+      - .github/workflows/opendesign.yml
+  push:
+    branches: [main]
+    paths:
+      - deploy/opendesign/**
+      - deploy/tests/opendesign*
+      - .github/workflows/opendesign.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Check OpenDesign image, authentication and rollback
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Check credential preservation and deployment rollback
+        run: python3 -m unittest discover -s deploy/tests -p opendesign_test.py
+      - name: Check real nginx TLS, authentication, uploads and WebSockets
+        run: |
+          docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh alpine:3.23 -c \
+            'apk add --no-cache python3 nginx openssl >/dev/null && PYTHONDONTWRITEBYTECODE=1 OPENDESIGN_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p opendesign_nginx_test.py'
+      - name: Start and check the exact official runtime image
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          credential="$(mktemp)"
+          compose=(docker compose --project-name itzephir-opendesign --env-file "$credential" -f deploy/opendesign/compose.yaml)
+          cleanup() {
+            "${compose[@]}" down >/dev/null 2>&1 || true
+            docker volume rm itzephir-opendesign-data >/dev/null 2>&1 || true
+            rm -f "$credential"
+          }
+          trap cleanup EXIT
+          printf 'OD_API_TOKEN=%s\n' "$(openssl rand -hex 32)" > "$credential"
+          docker volume create --label io.itzephir.service=opendesign itzephir-opendesign-data >/dev/null
+          "${compose[@]}" config --quiet
+          "${compose[@]}" up -d --no-build --wait --wait-timeout 120
+          python3 deploy/opendesign/smoke.py "$credential"
+
+  deploy:
+    name: Deploy private OpenDesign workspace
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: infrastructure
+    concurrency:
+      group: itzephir-opendesign-deployment
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Apply committed OpenDesign deployment on the existing VM
+        env:
+          INFRA_SSH_KEY: ${{ secrets.INFRA_SSH_KEY }}
+          DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for setting in INFRA_SSH_KEY DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
+            [[ -n "${!setting}" ]] || { echo "Missing infrastructure setting: $setting" >&2; exit 1; }
+          done
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
+          umask 077
+          work="$(mktemp -d)"
+          remote="/tmp/itzephir-opendesign-$GITHUB_SHA-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          ssh_args=(-i "$work/key" -o BatchMode=yes -o StrictHostKeyChecking=yes -o "UserKnownHostsFile=$work/known_hosts" -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=2)
+          cleanup() {
+            ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "rm -rf -- '$remote'" >/dev/null 2>&1 || true
+            rm -rf -- "$work"
+          }
+          trap cleanup EXIT
+          printf '%s\n' "$INFRA_SSH_KEY" > "$work/key"
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
+          tar -czf "$work/opendesign.tar.gz" -C deploy/opendesign compose.yaml nginx.conf deploy.py
+          ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
+          scp "${ssh_args[@]}" "$work/opendesign.tar.gz" "root@$DEPLOY_HOST:$remote/"
+          ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" \
+            "set -eu; tar -xzf '$remote/opendesign.tar.gz' -C '$remote'; python3 '$remote/deploy.py' '$GITHUB_SHA'"
+          {
+            echo 'OpenDesign is available at https://opendesign.itzephir.com behind password authentication.'
+            echo 'Anonymous UI/API rejection and authenticated HTTPS checks passed.'
+            echo 'Credentials remain on the VM; retrieval instructions are in deploy/opendesign/README.md.'
+          } >> "$GITHUB_STEP_SUMMARY"
