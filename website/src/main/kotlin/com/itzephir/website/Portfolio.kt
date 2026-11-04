@@ -113,24 +113,26 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
     }
 }
 private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
-    section("welcome-identity content-width") {
+    section("welcome-composition content-width") {
         attributes["aria-labelledby"] = "name"
-        div("identity-and-theme") {
-            img(src = asset("portrait.png"), alt = "Дмитрий Дворянников", classes = "portrait") { width = "56"; height = "56"; attributes["fetchpriority"] = "high" }
-            themeToggle(theme, page, true)
+        img(src = asset("portrait.jpg"), alt = "Дмитрий Дворянников", classes = "portrait") { width = "960"; height = "1280"; attributes["fetchpriority"] = "high" }
+        div("welcome-copy") {
+            div("identity-and-theme") {
+                h1("hero-name") {
+                    id = "name"; span { +"Дмитрий" }; +" "
+                    span { +"Дворянников"; span("personal-cursor") { attributes["aria-hidden"] = "true" } }
+                }
+                themeToggle(theme, page, true)
+            }
+            p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе, занимаюсь инфраструктурой и создаю собственные проекты." }
+            nav("shortcut-grid") {
+                attributes["aria-label"] = "Разделы"
+                shortcut("/projects", "projects/")
+                shortcut("/about", "about.md")
+                shortcut(telegram, "contacts")
+                shortcut("/dev", "dev/")
+            }
         }
-        h1("hero-name") {
-            id = "name"; span { +"Дмитрий" }; +" "
-            span { +"Дворянников"; span("personal-cursor") { attributes["aria-hidden"] = "true" } }
-        }
-        p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе, занимаюсь инфраструктурой и создаю собственные проекты." }
-    }
-    nav("shortcut-grid content-width") {
-        attributes["aria-label"] = "Разделы"
-        shortcut("/projects", "projects/")
-        shortcut("/about", "about.md")
-        shortcut(telegram, "contacts")
-        shortcut("/dev", "dev/")
     }
 }
 private fun FlowContent.shortcut(url: String, label: String) {

@@ -60,11 +60,31 @@ async function assertWelcomeNavigation(page, width) {
         assert.ok(box.font.includes('IBM Plex Mono'));
         assert.equal(box.size, '14px');
     }
-    if (width >= 720) assert.ok(boxes.every(box => box.y === boxes[0].y), 'Desktop links share one row');
-    else for (let i = 1; i < boxes.length; i++) {
-        assert.equal(boxes[i].x, boxes[0].x);
-        assert.equal(boxes[i].y - boxes[i - 1].y, 80);
+    for (let row = 0; row < 2; row++) {
+        const [left, right] = boxes.slice(row * 2, row * 2 + 2);
+        assert.equal(left.y, right.y, 'Navigation links share two equal rows');
+        assert.ok(Math.abs(right.x - left.x - left.w - 16) < 0.03);
     }
+    assert.equal(boxes[2].x, boxes[0].x);
+    assert.equal(boxes[2].y - boxes[0].y, 80);
+    const portrait = await page.locator('.portrait').boundingBox();
+    const copy = await page.locator('.welcome-copy').boundingBox();
+    const image = await page.locator('.portrait').evaluate(img => ({
+        src: img.getAttribute('src'), width: img.naturalWidth, height: img.naturalHeight, filter: getComputedStyle(img).filter,
+    }));
+    assert.ok(image.src.startsWith('/assets/portrait.jpg?'));
+    assert.deepEqual([image.width, image.height, image.filter], [960, 1280, 'none']);
+    if (width >= 720) {
+        assert.ok(Math.abs(portrait.height / portrait.width - 4 / 3) < 0.01);
+        assert.ok(copy.x >= portrait.x + portrait.width + 32, 'Desktop copy sits beside the portrait');
+        if (width >= 1000) assert.deepEqual([portrait.width, portrait.height], [360, 480]);
+    } else {
+        assert.equal(copy.x, portrait.x);
+        assert.equal(copy.y - portrait.y - portrait.height, 32);
+        assert.equal(copy.width, portrait.width);
+        if (width === 390 || width === 320) assert.equal(portrait.height, width === 390 ? 280 : 240);
+    }
+    assert.ok(await page.locator('.hero-name').evaluate(name => name.scrollWidth <= name.clientWidth), 'Name must fit beside the mobile theme control');
     assert.equal(await page.locator('.greeting-title, .section-label, .pinned-project, .dev-portal').count(), 0);
 }
 
@@ -162,7 +182,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
             for (const width of [1440, 768, 720, 719, 390, 320]) {
                 for (const path of ['/', '/projects']) {
                     const mobile = width < 720;
-                    const height = width === 1440 ? (path === '/' ? 1120 : 1522) : (mobile ? 972 : 1000);
+                    const height = width === 1440 ? (path === '/' ? 900 : 1522) : (mobile ? 884 : 1000);
                     await page.setViewportSize({ width, height });
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'networkidle' });
                     await page.evaluate(() => document.fonts.ready);
@@ -185,11 +205,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                     assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
                     const brokenImages = await page.locator('img:visible').evaluateAll(images => images.filter(img => !img.complete || !img.naturalWidth).map(img => img.src));
                     assert.deepEqual(brokenImages, []);
-                    if (path === '/') {
-                        const portrait = await page.locator('.portrait').boundingBox();
-                        assert.equal(portrait.width, mobile ? 48 : 56);
-                        assert.equal(portrait.height, mobile ? 48 : 56);
-                    } else if (mobile) assert.ok(await page.locator('.back-link').isVisible());
+                    if (path !== '/' && mobile) assert.ok(await page.locator('.back-link').isVisible());
                     if (!mobile) {
                         const slot = await page.locator('.logo').boundingBox();
                         const artwork = await page.locator('.logo-artwork').boundingBox();
