@@ -102,12 +102,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
 .pinned-description { margin-top: 4px; font-size: 13px; line-height: 20px; }
 .pinned-action { color: var(--accent); }
 .pinned-project:hover { background: var(--raised); }
-.site-footer { display: flex; flex-direction: column; gap: 24px; border-top: 1px solid var(--line); padding-top: 24px; font-size: 13px; line-height: 20px; }
-.footer-main { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.footer-links { display: flex; align-items: center; gap: 24px; }
-.footer-links a:hover, .contact-email:hover, .text-link:hover { text-decoration: underline; text-underline-offset: 4px; }
-.home-footer { margin-top: auto; border: 0; padding: 0; }
-.home-footer .footer-links { display: none; }
+.contact-email:hover, .text-link:hover { text-decoration: underline; text-underline-offset: 4px; }
 .page-canvas { display: flex; flex: 1; justify-content: center; min-width: 0; }
 .page-content { display: flex; flex-direction: column; gap: 32px; width: min(900px, calc(100% - 64px)); margin: 64px 32px 48px; }
 .page-introduction { display: flex; flex-direction: column; gap: 16px; }
@@ -181,10 +176,7 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
     .pinned-title { grid-column: 2; grid-row: 1; }
     .pinned-project > .icon:last-child { grid-column: 3; grid-row: 1; }
     .pinned-description { grid-column: 1 / -1; grid-row: 2; margin: 0; }
-    .pinned-action, .footer-summary { display: none; }
-    .home-footer { margin-top: 0; border-top: 1px solid var(--line); padding-top: 24px; }
-    .home-footer .footer-links { display: flex; }
-    .footer-links { gap: 16px; }
+    .pinned-action { display: none; }
     .page-content { gap: 24px; width: calc(100% - 48px); margin: 40px 24px 32px; }
     .page-controls { display: flex; justify-content: space-between; align-items: center; height: 44px; }
     .back-link { display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 12px; color: var(--accent); }
@@ -198,12 +190,9 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
     .launcher-query { height: 32px; padding: 0; box-shadow: none; border-radius: 0; background: transparent; }
     .project-grid { grid-template-columns: minmax(0, 1fr); gap: 24px; }
     .project-grid .project { min-height: 206px; }
-    .footer-name { display: none; }
     .profile-panel { padding: 24px; font-size: 15px; line-height: 24px; }
 }
 
 @media (max-width: 359px) {
     .hero-name { font-size: 32px; }
-    .footer-main { gap: 8px; }
-    .footer-links { gap: 12px; }
 }

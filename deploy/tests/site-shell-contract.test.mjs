@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
 const root = fileURLToPath(new URL('../..', import.meta.url));
-const protectedClasses = /\.(?:skip-link|app-header|brand|logo(?:-artwork)?|workspace-label|header-actions|header-language|header-github|desktop-theme|webring|ring-[\w-]+|editor-tabs?|editor-tab-link|tab-close(?:-form)?)(?![\w-])/;
+const protectedClasses = /\.(?:skip-link|app-header|brand|logo(?:-artwork)?|workspace-label|header-actions|header-language|header-github|desktop-theme|webring|ring-[\w-]+|editor-tabs?|editor-tab-link|tab-close(?:-form)?|site-footer|footer-[\w-]+)(?![\w-])/;
 
 async function files(directory) {
     const entries = await readdir(directory, { withFileTypes: true });
@@ -22,6 +22,6 @@ test('site shell has one rendering owner and one stylesheet owner', async () => 
     assert.doesNotMatch(shellCss, /\.page-[\w-]+|\[data-page/, 'Shell CSS must not depend on the current page');
     const kotlinRoot = resolve(root, 'website/src/main/kotlin');
     for (const path of (await files(kotlinRoot)).filter(path => path.endsWith('.kt') && !path.endsWith('/SiteShell.kt'))) {
-        assert.doesNotMatch(await readFile(path, 'utf8'), /["'](?:app-header|editor-tabs mono|header-actions|workspace-label)["']/, `Shell markup belongs in SiteShell.kt: ${path}`);
+        assert.doesNotMatch(await readFile(path, 'utf8'), /["'](?:app-header|editor-tabs mono|header-actions|workspace-label|site-footer|footer-[\w-]+)["']|\bfooter\s*\(/, `Shell markup belongs in SiteShell.kt: ${path}`);
     }
 });
