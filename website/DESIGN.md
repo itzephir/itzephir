@@ -22,11 +22,67 @@ parameters, close behavior and environment isolation.
 
 ## Portfolio screens
 
+### Portrait welcome
+
+The approved [portrait composition](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=138-5855)
+uses the user's original color photograph, name, biography and editor shell,
+with four equal links: `projects/`,
+`about.md`, `contacts` and `dev/`. There is no greeting, role tagline, section
+counter, repeated call to action, link description, pinned project or separate
+workshop portal. Contacts retains its Telegram destination; `dev/` opens `/dev`.
+
+The centered desktop composition is 900 × 480 px: a 360 × 480 px portrait,
+48 px gap and a 492 px copy column. The left-aligned name uses IBM Plex Sans
+Medium 64/68, the biography 18/28, and the three copy groups have 32 px gaps.
+The portrait has 16 px corners and retains its original colors without filters.
+`portrait.jpg` is the user's 960 × 1280 px original, also imported into Figma.
+
+Links form a 2 × 2 grid at every width. Each is 64 px high with IBM Plex Mono
+14/24, Workspace panel/line/text tokens, 12 px corners and 16 px gaps. At
+720–999 px the composition remains horizontal with fluid image/copy columns,
+a 32 px gap and a 48/54 name.
+
+Below 720 px the portrait sits above the copy, with 24 px side insets, 32 px
+top/image-to-copy spacing and 40 px bottom padding. At 390 px its crop is
+342 × 280 px; at 320 px it is 272 × 240 px. Wider mobile crops grow up to
+420 px high. Copy groups have 24 px gaps; the name is 40/44, reducing to 32/38
+when the copy column is narrower than 320 px and 30/36 below 268 px. Container
+widths keep the name clear of the theme control with overlay or classic scrollbars.
+The biography is 15/22. The mobile theme control sits beside
+the name. The shared desktop app-bar masters `59:1687` / `59:1688` omit the
+decorative RU label in v2. Earlier centered welcome frames remain as history.
+
+### Shared footer v2
+
+[Workspace / Site footer](https://www.figma.com/design/zHX90tHJtN7q1PqavIO68s/?node-id=131-5359)
+is the shared footer for every site document, extending the shell contract to v2.
+Its masters are `131:5355` (dark desktop), `131:5356` (dark mobile),
+`131:5357` (light desktop), and `131:5358` (light mobile). All eight baseline
+screens and all 33 accepted Dev UI/catalog screens use linked instances;
+superseded content footers are hidden.
+
+The footer has a thin Workspace line divider, `~/itzephir` linking to `/` on the
+left, and Telegram, GitHub and Email on the right. It has no additional name or
+slogan. The path uses IBM Plex Mono 12/20; contacts use IBM Plex Sans 13/20.
+Links have 44 px targets. The centered row is 900 px on desktop and 342 px at
+390 px mobile width; the implementation uses fluid 32/24 px side insets and a
+900 px maximum. Divider-to-links spacing is 16 px; bottom insets are 32/24 px;
+contact gaps are 24/16 px, reducing to 12 px below 360 px.
+While the staging badge is visible, the implementation reserves an 84/80 px
+bottom inset so the fixed notice cannot cover footer links. Dismissing the badge
+restores the ordinary desktop/mobile inset; production uses the ordinary inset.
+
+`SiteShell.kt` renders the footer after main content for portfolio, public `/dev`,
+sign-in, and authenticated panel documents. `site-shell.css` owns its styling.
+The [shell contract](architecture/site-shell.md) covers the fixed link order,
+home navigation without JavaScript, theme/route consistency and narrow screens.
+
 | Screen | Dark | Light |
 | --- | --- | --- |
-| Welcome desktop | `14:1898` | `14:2009` |
+| Welcome desktop | `138:5855` | `138:6024` |
 | Projects desktop | `14:2734` | `14:2882` |
-| Welcome mobile | `14:3029` | `14:3254` |
+| Welcome mobile 390 | `138:6189` | `138:6287` |
+| Welcome mobile 320 | `138:6597` | `138:6667` |
 | Projects mobile | `14:3123` | `14:3346` |
 
 The approved full logo is the connected `itz` monogram followed by `ephir` in
@@ -45,8 +101,8 @@ unchanged. Use the short mark for icons, and the whole-name wordmark in desktop
 headers.
 
 Colors and content spacing are defined in `styles.css`; shared shell geometry
-is owned by `site-shell.css`. Icons and portrait are local
-exports from the same Figma screens. IBM Plex Sans/Mono include Cyrillic and are
+is owned by `site-shell.css`. Icons are local exports from the same Figma screens;
+the portrait uses the original photograph. IBM Plex Sans/Mono include Cyrillic and are
 self-hosted; font and icon license notices are under `third_party`.
 
 The implementation uses fluid widths and a 720 px breakpoint. The mobile header
@@ -106,11 +162,11 @@ conditional on provider configuration; password login is always the initial
 configured flow. Sample projects, usernames and masked tokens in Figma are
 illustrative; no credentials or actual service tokens are design assets.
 
-The portal from welcome to `/dev` is a content card, not a permanent editor
-tab. Dev documents join the same visited-tab cookie; project settings accept
-only registered UUID paths. The strip scrolls when many documents are open,
-preserving the app bar and 45 px strip height. The approved header HTML fixture
-and app bar geometry are unchanged.
+The welcome `dev/` shortcut is one of its four equal content links, rather than
+a permanent editor tab. Dev documents join the same visited-tab cookie;
+project settings accept only registered UUID paths. The strip scrolls when many
+documents are open, preserving the common app bar and 45 px strip height.
+The v2 app bar omits RU as described above; Dev content adds no header overrides.
 
 `LocatorPageRenderer` separates locator forms and permission checks from the
 website's document renderer. `Development.kt` supplies its content to

@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
+import { assertSharedFooter } from './site-footer.mjs';
 
 test('project panel: JWT login, owner isolation, admin workflow, public landing and mobile layout', {
     timeout: 120_000, skip: !process.env.LOCATOR_TEST_DATABASE_URL,
@@ -68,19 +69,23 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         for (const width of [320, 390, 719, 720, 768, 999, 1000, 1440]) {
             await admin.setViewportSize({ width, height: 1000 });
             let geometry;
+            let footerGeometry;
             for (const theme of ['dark', 'light']) for (const route of routes) {
                 const response = await admin.goto(`${base}${route}?theme=${theme}`);
                 assert.equal(response.status(), 200, route);
                 await admin.evaluate(() => document.fonts.ready);
-                assert.equal(await admin.locator('#portfolio[data-shell-contract="1"]').count(), 1);
+                assert.equal(await admin.locator('#portfolio[data-shell-contract="2"]').count(), 1);
                 assert.equal(await admin.locator('.app-header').count(), 1);
                 assert.equal(await admin.locator('main#content').count(), 1);
                 assert.equal(await admin.locator('.workspace-label').textContent(), route);
-                const actual = await admin.locator('.app-header, .logo, .webring, .header-language, .desktop-theme, .header-github').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => {
+                const actual = await admin.locator('.app-header, .logo, .webring, .desktop-theme, .header-github').evaluateAll(nodes => nodes.filter(n => n.getClientRects().length).map(n => {
                     const r = n.getBoundingClientRect(); return [n.className, ...[r.x, r.y, r.width, r.height].map(v => Math.round(v * 100) / 100)];
                 }));
                 geometry ??= actual;
                 assert.deepEqual(actual, geometry, `Shared shell moved: ${route}, ${width}, ${theme}`);
+                const actualFooter = await assertSharedFooter(admin);
+                footerGeometry ??= actualFooter;
+                assert.deepEqual(actualFooter, footerGeometry, `Shared footer changed: ${route}, ${width}, ${theme}`);
                 assert.ok(await admin.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${route}, ${width}, ${theme}`);
                 const images = await admin.locator('img').evaluateAll(nodes => nodes.filter(n => !n.complete || !n.naturalWidth).map(n => n.src));
                 assert.deepEqual(images, [], route);
@@ -100,6 +105,12 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await admin.goto(panel);
         await admin.locator('article').filter({ hasText: pending.project.project }).getByRole('button', { name: 'Одобрить', exact: true }).click();
         const publicPage = await adminContext.newPage();
+        await publicPage.goto(base);
+        await publicPage.locator('.shortcut[href="/dev"]').click();
+        assert.equal(new URL(publicPage.url()).pathname, '/dev');
+        await assertSharedFooter(publicPage);
+        await publicPage.locator('.footer-path').click();
+        assert.equal(new URL(publicPage.url()).pathname, '/');
         await publicPage.goto(`${base}/dev`);
         assert.equal(await publicPage.locator('.project-card').count(), 3);
         assert.equal(await publicPage.locator(`a[href='/dev/project/${own.project.slug}/']`).count(), 1);
@@ -117,7 +128,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         await owner.screenshot({ path: resolve(output, 'panel-owner-390.png'), fullPage: true });
         const hidden = await owner.goto(`${panel}/${other.project.id}/edit`);
         assert.equal(hidden.status(), 404);
-        assert.equal(await owner.locator('#portfolio[data-shell-contract="1"]').count(), 1);
+        assert.equal(await owner.locator('#portfolio[data-shell-contract="2"]').count(), 1);
         assert.equal((await owner.goto(`${panel}/new`)).status(), 403);
         await owner.goto(`${panel}/${own.project.id}/edit`);
         await owner.getByLabel('Имя проекта', { exact: true }).fill('minor-updated');

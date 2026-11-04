@@ -78,12 +78,6 @@ private fun MAIN.developmentContent(theme: Theme, page: PortfolioPage, view: Loc
         div("dev-public dev-ui${if (page != PortfolioPage.Development) " dev-login" else ""}") {
             developmentControls(theme, page)
             view.content(this)
-            footer("site-footer") {
-                div("footer-main") {
-                    span("mono muted") { +"~/itzephir" }
-                    div("footer-links") { a("https://t.me/ItzEphir") { +"Telegram" }; a(github) { +"GitHub" }; a("mailto:d.y.dvoryannikov@mail.ru") { +"Email" } }
-                }
-            }
         }
     }
 }

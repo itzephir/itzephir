@@ -6,10 +6,11 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 import { chromium } from 'playwright-core';
+import { assertSharedFooter } from './site-footer.mjs';
 
 async function headerGeometry(page) {
     await page.evaluate(() => document.fonts.ready);
-    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .header-language, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
+    return page.locator('.app-header, .brand, .workspace-label, .header-actions, .webring, .webring a, .desktop-theme, .header-github, .editor-tabs').evaluateAll(elements =>
         elements.filter(element => element.getClientRects().length).map(element => {
             const { x, y, width, height } = element.getBoundingClientRect();
             return { element: element.classList[0], box: [x, y, width, height].map(value => Math.round(value * 100) / 100) };
@@ -23,11 +24,11 @@ async function assertShellDimensions(page, width) {
     const header = await box('.app-header');
     near(header.x, 0, 'Header left'); near(header.y, 0, 'Header top');
     near(header.height, mobile ? 69 : 60, 'Header height');
-    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '1');
+    assert.equal(await page.locator('#portfolio').getAttribute('data-shell-contract'), '2');
     assert.equal(await page.locator('.brand').isVisible(), !mobile);
     assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
     assert.equal(await page.locator('.workspace-label').isVisible(), width >= 1000);
-    assert.equal(await page.locator('.header-language').isVisible(), width >= 1000);
+    assert.equal(await page.locator('.header-language').count(), 0);
     for (const selector of ['.desktop-theme', '.header-github']) {
         assert.equal(await page.locator(selector).isVisible(), !mobile);
         if (!mobile) { const control = await box(selector); near(control.width, 44, `${selector} width`); near(control.height, 44, `${selector} height`); }
@@ -45,13 +46,56 @@ async function assertShellDimensions(page, width) {
     }
 }
 
+async function assertWelcomeNavigation(page, width) {
+    const links = page.locator('.shortcut');
+    assert.deepEqual(await links.allTextContents(), ['projects/', 'about.md', 'contacts', 'dev/']);
+    assert.deepEqual(await links.evaluateAll(nodes => nodes.map(n => n.getAttribute('href'))), ['/projects', '/about', 'https://t.me/ItzEphir', '/dev']);
+    const boxes = await links.evaluateAll(nodes => nodes.map(n => {
+        const r = n.getBoundingClientRect(), style = getComputedStyle(n);
+        return { x: r.x, y: r.y, w: r.width, h: r.height, font: style.fontFamily, size: style.fontSize };
+    }));
+    for (const box of boxes) {
+        assert.equal(box.h, 64);
+        assert.ok(Math.abs(box.w - boxes[0].w) < 0.03);
+        assert.ok(box.font.includes('IBM Plex Mono'));
+        assert.equal(box.size, '14px');
+    }
+    for (let row = 0; row < 2; row++) {
+        const [left, right] = boxes.slice(row * 2, row * 2 + 2);
+        assert.equal(left.y, right.y, 'Navigation links share two equal rows');
+        assert.ok(Math.abs(right.x - left.x - left.w - 16) < 0.03);
+    }
+    assert.equal(boxes[2].x, boxes[0].x);
+    assert.equal(boxes[2].y - boxes[0].y, 80);
+    const portrait = await page.locator('.portrait').boundingBox();
+    const copy = await page.locator('.welcome-copy').boundingBox();
+    const image = await page.locator('.portrait').evaluate(img => ({
+        src: img.getAttribute('src'), width: img.naturalWidth, height: img.naturalHeight, filter: getComputedStyle(img).filter,
+    }));
+    assert.ok(image.src.startsWith('/assets/portrait.jpg?'));
+    assert.deepEqual([image.width, image.height, image.filter], [960, 1280, 'none']);
+    if (width >= 720) {
+        assert.ok(Math.abs(portrait.height / portrait.width - 4 / 3) < 0.01);
+        assert.ok(copy.x >= portrait.x + portrait.width + 32, 'Desktop copy sits beside the portrait');
+        if (width >= 1000) assert.deepEqual([portrait.width, portrait.height], [360, 480]);
+    } else {
+        assert.equal(copy.x, portrait.x);
+        assert.equal(copy.y - portrait.y - portrait.height, 32);
+        assert.equal(copy.width, portrait.width);
+        if (width === 390 || width === 320) assert.equal(portrait.height, width === 390 ? 280 : 240);
+    }
+    const name = await page.locator('.hero-name').evaluate(node => ({ available: node.clientWidth, text: node.scrollWidth }));
+    assert.ok(name.text <= name.available, `Name must fit beside the mobile theme control at ${width}px: ${JSON.stringify(name)}`);
+    assert.equal(await page.locator('.greeting-title, .section-label, .pinned-project, .dev-portal').count(), 0);
+}
+
 test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigation', { timeout: 120_000 }, async () => {
     const port = process.env.TEST_PORT ?? '4173';
     const base = `http://127.0.0.1:${port}`;
     const root = fileURLToPath(new URL('../..', import.meta.url));
     // Database-backed dev documents exercise the same shell in locator.test.mjs.
     const source = await readFile(resolve(root, 'website/src/main/kotlin/com/itzephir/website/Portfolio.kt'), 'utf8');
-    const registry = source.slice(source.indexOf('data class PortfolioPage'), source.indexOf('private const val telegram'));
+    const registry = source.slice(source.indexOf('data class PortfolioPage'), source.indexOf('internal const val telegram'));
     const routes = [...registry.matchAll(/^\s+val \w+ = PortfolioPage\("([^"]+)",/gm)].map(match => match[1]).filter(path => !path.startsWith('/dev'));
     assert.ok(routes.length >= 3 && routes.includes('/'), 'Portfolio page registry must be discoverable');
     const distribution = resolve(process.env.WEBSITE_DIST ?? resolve(root, 'website/build/install/website'));
@@ -113,18 +157,23 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         page.on('response', response => { if (response.status() >= 400) failedResponses.push(response.url()); });
         page.on('request', request => requests.push(request.url()));
         // The shared shell must not move when the page, theme or scrollbar changes.
-        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 320]) {
+        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 375, 360, 320]) {
             await page.setViewportSize({ width, height: 1000 });
             let expectedHeader;
+            let expectedFooter;
             for (const theme of ['dark', 'light']) {
                 for (const path of routes) {
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'load' });
                     const actualHeader = await headerGeometry(page);
                     await assertShellDimensions(page, width);
+                    if (path === '/') await assertWelcomeNavigation(page, width);
                     assert.equal(await page.locator('.workspace-label').textContent(), path);
                     assert.ok((await page.locator('.logo-artwork').getAttribute('src')).includes(`/design/${theme}/wordmark.svg?`));
                     expectedHeader ??= actualHeader;
                     assert.deepEqual(actualHeader, expectedHeader, `Header moved: ${path} ${theme} ${width}px`);
+                    const actualFooter = await assertSharedFooter(page);
+                    expectedFooter ??= actualFooter;
+                    assert.deepEqual(actualFooter, expectedFooter, `Footer changed: ${path} ${theme} ${width}px`);
                     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `Overflow: ${path} ${theme} ${width}px`);
                 }
             }
@@ -134,7 +183,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
             for (const width of [1440, 768, 720, 719, 390, 320]) {
                 for (const path of ['/', '/projects']) {
                     const mobile = width < 720;
-                    const height = width === 1440 ? (path === '/' ? 1120 : 1522) : (mobile ? 972 : 1000);
+                    const height = width === 1440 ? (path === '/' ? 900 : 1522) : (mobile ? 884 : 1000);
                     await page.setViewportSize({ width, height });
                     await page.goto(`${base}${path}?theme=${theme}`, { waitUntil: 'networkidle' });
                     await page.evaluate(() => document.fonts.ready);
@@ -157,11 +206,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
                     assert.equal(await page.locator('.editor-tabs').isVisible(), !mobile);
                     const brokenImages = await page.locator('img:visible').evaluateAll(images => images.filter(img => !img.complete || !img.naturalWidth).map(img => img.src));
                     assert.deepEqual(brokenImages, []);
-                    if (path === '/') {
-                        const portrait = await page.locator('.portrait').boundingBox();
-                        assert.equal(portrait.width, mobile ? 48 : 56);
-                        assert.equal(portrait.height, mobile ? 48 : 56);
-                    } else if (mobile) assert.ok(await page.locator('.back-link').isVisible());
+                    if (path !== '/' && mobile) assert.ok(await page.locator('.back-link').isVisible());
                     if (!mobile) {
                         const slot = await page.locator('.logo').boundingBox();
                         const artwork = await page.locator('.logo-artwork').boundingBox();
@@ -283,6 +328,10 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         await plain.locator('.theme-toggle:visible').click();
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await plain.locator('.back-link').click();
+        assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
+        await plain.goto(`${base}/projects`);
+        await plain.locator('.footer-path').click();
+        assert.equal(new URL(plain.url()).pathname, '/');
         assert.equal(await plain.locator('#portfolio').getAttribute('data-theme'), 'dark');
         await plain.screenshot({ path: resolve(screenshots, 'no-js-390.png'), fullPage: true });
         await plain.setViewportSize({ width: 1440, height: 1000 });

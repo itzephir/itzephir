@@ -4,7 +4,7 @@ import kotlinx.html.*
 
 private const val ring = "https://webring.otomir23.me/"
 
-/** Shared shell contract v1. Pages supply main content, never header markup or layout. */
+/** Shared shell contract v2. Pages supply main content, never header/footer markup or layout. */
 internal fun DIV.siteShell(
     theme: Theme,
     page: PortfolioPage,
@@ -13,7 +13,7 @@ internal fun DIV.siteShell(
     content: MAIN.() -> Unit,
 ) {
     id = "portfolio"; attributes["data-theme"] = theme.value
-    attributes["data-shell-contract"] = "1"
+    attributes["data-shell-contract"] = "2"
     a("#content", classes = "skip-link") { +"Перейти к содержимому" }
     header("app-header") {
         a("/", classes = "brand") {
@@ -34,7 +34,6 @@ internal fun DIV.siteShell(
                     span { +neighbors.next }; icon(theme, "chevron-right", 16, "webring-right-mobile")
                 }
             }
-            span("mono muted header-language") { +"RU" }
             themeToggle(theme, page, false)
             externalLink(github, "icon-button header-github") { attributes["aria-label"] = "GitHub itzephir"; icon(theme, "github", 18) }
         }
@@ -46,6 +45,18 @@ internal fun DIV.siteShell(
     main(if (page == PortfolioPage.Welcome) "welcome-canvas" else "page-canvas") {
         id = "content"
         content()
+    }
+    footer("site-footer") {
+        a("/", classes = "mono muted footer-path") {
+            attributes["aria-label"] = "itzephir — главная"
+            +"~/itzephir"
+        }
+        nav("footer-links") {
+            attributes["aria-label"] = "Контакты"
+            externalLink(telegram, "contact-link") { +"Telegram" }
+            externalLink(github, "contact-link") { +"GitHub" }
+            a(email, classes = "contact-link") { +"Email" }
+        }
     }
 }
 private fun FlowContent.editorTab(theme: Theme, opened: PortfolioPage, current: PortfolioPage, canClose: Boolean) {

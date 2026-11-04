@@ -43,9 +43,9 @@ data class PortfolioPage private constructor(
     }
 }
 
-private const val telegram = "https://t.me/ItzEphir"
+internal const val telegram = "https://t.me/ItzEphir"
 internal const val github = "https://github.com/itzephir"
-private const val email = "mailto:d.y.dvoryannikov@mail.ru"
+internal const val email = "mailto:d.y.dvoryannikov@mail.ru"
 private data class Project(val name: String, val description: String, val stack: String, val url: String)
 private val projects = listOf(
     Project("Photorus", "Микросервисы для Telegram WebApp: OCR, AI-разбор правил, SSE и MongoDB.", "Kotlin · Ktor · Docker", "$github/photorus-tgapp-backend"),
@@ -113,57 +113,32 @@ private fun DIV.portfolioContent(theme: Theme, page: PortfolioPage, neighbors: W
     }
 }
 private fun FlowContent.welcome(theme: Theme, page: PortfolioPage) {
-    section("welcome-identity content-width") {
+    section("welcome-composition content-width") {
         attributes["aria-labelledby"] = "name"
-        div("identity-and-theme") {
-            div("greeting") {
-                img(src = asset("portrait.png"), alt = "Дмитрий Дворянников", classes = "portrait") { width = "56"; height = "56"; attributes["fetchpriority"] = "high" }
-                div { p("greeting-title") { +"Привет!" }; p("mono muted greeting-role") { +"Инфраструктура · Проекты" } }
+        img(src = asset("portrait.jpg"), alt = "Дмитрий Дворянников", classes = "portrait") { width = "960"; height = "1280"; attributes["fetchpriority"] = "high" }
+        div("welcome-copy") {
+            div("identity-and-theme") {
+                h1("hero-name") {
+                    id = "name"; span { +"Дмитрий" }; +" "
+                    span { +"Дворянников"; span("personal-cursor") { attributes["aria-hidden"] = "true" } }
+                }
+                themeToggle(theme, page, true)
             }
-            themeToggle(theme, page, true)
-        }
-        h1("hero-name") {
-            id = "name"; span { +"Дмитрий" }; +" "
-            span { +"Дворянников"; span("personal-cursor") { attributes["aria-hidden"] = "true" } }
-        }
-        p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе, занимаюсь инфраструктурой и создаю собственные проекты." }
-    }
-    section("shortcuts content-width") {
-        attributes["aria-labelledby"] = "shortcuts-heading"
-        div("section-label mono muted") {
-            h2 { id = "shortcuts-heading"; +"ОТКРЫТЬ В WORKSPACE" }
-            span { span("desktop-only") { +"03 РАЗДЕЛА" }; span("mobile-only") { +"03" } }
-        }
-        div("shortcut-grid") {
-            shortcut(theme, "01", "/projects", "projects/", "folder-open", "Посмотреть проекты", "От launcher для macOS до backend.", "Инструменты и приложения.")
-            shortcut(theme, "02", "/about", "about.md", "profile", "Познакомиться ближе", "Опыт, технологии и подход к работе.", "Опыт, технологии и подход.")
-            shortcut(theme, "03", telegram, "contacts", "messages", "Написать напрямую", "Telegram, почта или GitHub.")
+            p("welcome-description muted") { +"Kotlin-разработчик из Москвы. Работаю в Яндексе, занимаюсь инфраструктурой и создаю собственные проекты." }
+            nav("shortcut-grid") {
+                attributes["aria-label"] = "Разделы"
+                shortcut("/projects", "projects/")
+                shortcut("/about", "about.md")
+                shortcut(telegram, "contacts")
+                shortcut("/dev", "dev/")
+            }
         }
     }
-    externalLink("$github/itzcast", "pinned-project content-width") {
-        icon(theme, "pin", 18, "pin-mobile")
-        div("pinned-copy") { p("pinned-title") { +"itzcast" }; p("muted pinned-description") { +"Быстрый launcher для macOS. Kotlin Multiplatform + Compose." } }
-        span("mono pinned-action") { +"Открыть проект" }; icon(theme, "arrow", 16)
-    }
-    a("/dev", classes = "dev-portal content-width") {
-        div { p { +"Открытая мастерская" }; p("muted") { +"Актуальные проекты в разработке" } }
-        span("mono") { +"Открыть витрину" }
-    }
-    siteFooter(true)
 }
-private fun FlowContent.shortcut(theme: Theme, number: String, url: String, filename: String, image: String, label: String, description: String, mobileDescription: String = description) {
+private fun FlowContent.shortcut(url: String, label: String) {
     a(url, classes = "shortcut") {
         if (url.startsWith("https://")) { target = "_blank"; rel = "noopener noreferrer" }
-        div("shortcut-top") { icon(theme, image, 20); span("mono muted") { +filename } }
-        span("shortcut-index mono") { +number }
-        div("shortcut-copy") {
-            h3 { +label }
-            p("muted") {
-                if (description == mobileDescription) +description
-                else { span("desktop-only") { +description }; span("mobile-only") { +mobileDescription } }
-            }
-        }
-        span("shortcut-chevron") { icon(theme, "chevron-right", 16) }
+        +label
     }
 }
 private fun FlowContent.pageControls(theme: Theme, page: PortfolioPage) {
@@ -191,7 +166,6 @@ private fun FlowContent.projectList(theme: Theme, page: PortfolioPage) {
             }
             contactCard(theme)
         }
-        siteFooter(false)
     }
 }
 private fun FlowContent.featuredProject(theme: Theme) {
@@ -239,21 +213,7 @@ private fun FlowContent.profile(theme: Theme, page: PortfolioPage) {
             ul("stack-list mono") { listOf("Kotlin", "Ktor", "Docker", "Linux", "CI/CD").forEach { li { +it } } }
             a("/projects", classes = "text-link") { +"Мои проекты" }
         }
-        contactCard(theme); siteFooter(false)
-    }
-}
-private fun FlowContent.siteFooter(home: Boolean) {
-    footer("site-footer content-width${if (home) " home-footer" else ""}") {
-        div("footer-main") {
-            a("/", classes = "mono muted footer-path") { +"~/itzephir" }
-            if (home) span("mono muted footer-summary") { +"infrastructure / own projects" }
-            nav("footer-links") {
-                attributes["aria-label"] = "Контакты"
-                externalLink(telegram, "contact-link") { +"Telegram" }; externalLink(github, "contact-link") { +"GitHub" }
-                a(email, classes = "contact-link") { +"Email" }
-            }
-        }
-        if (!home) p("footer-name muted") { +"Дмитрий Дворянников" }
+        contactCard(theme)
     }
 }
 internal fun FlowContent.icon(theme: Theme, name: String, size: Int, mobileName: String? = null) {
