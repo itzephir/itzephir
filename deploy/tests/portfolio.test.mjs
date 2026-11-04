@@ -84,7 +84,8 @@ async function assertWelcomeNavigation(page, width) {
         assert.equal(copy.width, portrait.width);
         if (width === 390 || width === 320) assert.equal(portrait.height, width === 390 ? 280 : 240);
     }
-    assert.ok(await page.locator('.hero-name').evaluate(name => name.scrollWidth <= name.clientWidth), 'Name must fit beside the mobile theme control');
+    const name = await page.locator('.hero-name').evaluate(node => ({ available: node.clientWidth, text: node.scrollWidth }));
+    assert.ok(name.text <= name.available, `Name must fit beside the mobile theme control at ${width}px: ${JSON.stringify(name)}`);
     assert.equal(await page.locator('.greeting-title, .section-label, .pinned-project, .dev-portal').count(), 0);
 }
 
