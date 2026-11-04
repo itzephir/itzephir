@@ -18,7 +18,7 @@ enum class RoutingMode {
 data class ProjectRouting(val mode: RoutingMode = RoutingMode.LEGACY, val target: String = "") {
     fun validate(slug: String) {
         if (mode in listOf(RoutingMode.DOCKER, RoutingMode.PROXY) &&
-            (!DNS_LABEL.matches(slug) || slug in RESERVED)) invalid("Для поддомена используйте до 63 букв, цифр и дефисов; dev и www зарезервированы.")
+            (!DNS_LABEL.matches(slug) || slug in RESERVED)) invalid("Для поддомена используйте до 63 букв, цифр и дефисов; dev, www и opendesign зарезервированы.")
         if (mode == RoutingMode.LEGACY) {
             if (target.isNotEmpty()) invalid("У существующего маршрута нет адреса назначения.")
             return
@@ -48,7 +48,7 @@ data class ProjectRouting(val mode: RoutingMode = RoutingMode.LEGACY, val target
     companion object {
         private val DNS_LABEL = Regex("[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?")
         private val CONTAINER = Regex("[a-zA-Z0-9][a-zA-Z0-9_-]{0,127}")
-        private val RESERVED = setOf("dev", "www")
+        private val RESERVED = setOf("dev", "www", "opendesign")
         private fun invalid(message: String): Nothing = throw LocatorException(400, "invalid_routing", message)
     }
 }
