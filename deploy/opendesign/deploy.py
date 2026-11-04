@@ -112,6 +112,9 @@ class Deployment:
             raise ValueError("Refusing to replace an unmanaged OpenDesign installation")
         if (self.site.exists() or self.enabled.is_symlink()) and not self.marker.exists():
             raise ValueError("Refusing to replace an unmanaged nginx site")
+        if (self.enabled.exists() or self.enabled.is_symlink()) and (
+                not self.enabled.is_symlink() or self.enabled.resolve() != self.site.resolve()):
+            raise ValueError("Refusing to replace a foreign nginx site link")
         token = self.prepare_credentials()
         self.check_volume()
         old_compose = self.compose_file.read_bytes() if self.compose_file.exists() else None

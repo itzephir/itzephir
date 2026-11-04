@@ -28,6 +28,7 @@ class OpenDesignNginxTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             root.chmod(0o755)
+            (root / "logs").mkdir()
             certificate, key = root / "cert.pem", root / "key.pem"
             subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                             "-subj", "/CN=opendesign.itzephir.com", "-keyout", str(key), "-out", str(certificate)],
@@ -74,7 +75,8 @@ class OpenDesignNginxTests(unittest.TestCase):
             site = site.replace("127.0.0.1:7456", f"127.0.0.1:{backend.server_port}")
             config = root / "nginx.conf"
             config.write_text(f"pid {root}/nginx.pid;\nerror_log {root}/error.log;\nevents {{}}\nhttp {{\n{site}\n}}")
-            subprocess.run(["nginx", "-t", "-p", str(root), "-c", str(config)], check=True, capture_output=True)
+            checked = subprocess.run(["nginx", "-t", "-p", str(root), "-c", str(config)], capture_output=True, text=True)
+            self.assertEqual(checked.returncode, 0, checked.stderr)
             process = subprocess.Popen(["nginx", "-p", str(root), "-c", str(config), "-g", "daemon off;"],
                                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             try:
