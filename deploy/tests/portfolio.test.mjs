@@ -156,7 +156,7 @@ test('Figma baseline: responsive themes, stateful tabs and no-JavaScript navigat
         page.on('response', response => { if (response.status() >= 400) failedResponses.push(response.url()); });
         page.on('request', request => requests.push(request.url()));
         // The shared shell must not move when the page, theme or scrollbar changes.
-        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 320]) {
+        for (const width of [1440, 1000, 999, 768, 720, 719, 390, 375, 360, 320]) {
             await page.setViewportSize({ width, height: 1000 });
             let expectedHeader;
             let expectedFooter;

@@ -161,7 +161,10 @@ a:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outlin
     .profile-panel { padding: 24px; font-size: 15px; line-height: 24px; }
 }
 
+@media (max-width: 374px) {
+    .hero-name { font-size: 32px; line-height: 38px; }
+}
+
 @media (max-width: 359px) {
     .portrait { height: 240px; }
-    .hero-name { font-size: 32px; line-height: 38px; }
 }
