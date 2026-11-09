@@ -150,12 +150,32 @@ and owns its application builds, containers, CI and production/dev/PR stands.
 
 Public `/dev/project/SLUG/`, `/dev/projects/SLUG/` and the old staging interceptor
 are removed and return 404, without redirects. The catalog, panel and resolve API
-use direct subdomain URLs. Stored `legacy` records remain editable as unconfigured
-records, with null launch URLs and no launch button; select a Docker/proxy/redirect
-target and approve it to publish them. Underscore slugs must be changed to DNS
-labels before enabling a target. No database migration guesses project targets.
-The old loopback gateway/snippet files on an existing VM are no longer referenced
-by public routes; remove them only after their owning projects have migrated.
+use direct subdomain URLs. Migration `005-project-hosts.sql` transfers the verified
+existing `minor-website` / `minor-web` record from `legacy` to `proxy`, on both stands.
+The stable internal targets are `http://127.0.0.1:18100/dev/project/minor-web` (prod)
+and `http://127.0.0.1:18101/dev/project/minor-web` (dev). These loopback gateways and
+project-owned snippets stay in place: the project's CI owns its rotating backend
+ports, so the migration must not pin the container currently occupying one slot.
+They are internal proxy destinations, not public launch paths. The outer gateway
+preserves the public host and strips the internal prefix/port from redirects and
+cookie paths. Do not remove `/etc/nginx/conf.d/project-gateway.conf` or the migrated
+project's snippets while its registry target still uses them.
+
+The migration runs transactionally once during normal application startup: PR
+deployment applies it to dev; a permitted merge/deployment applies it to production.
+It increments only the migrated record's revision, preserving IDs, credentials,
+owners, review status/metadata, revocation, description and readiness. Already
+configured destinations (including planning `anyq` and `itzmoney`) and other rows
+are untouched. It selects the stand from the standard database name installed by
+`setup-locator.py`; with a custom database name, set `LOCATOR_ENVIRONMENT=dev|prod`
+in its private environment file. An ambiguous stand fails startup and rolls back
+the transaction instead of routing a development project to production.
+
+Other `legacy` records remain editable as unconfigured records, with null launch
+URLs and no launch button; select a Docker/proxy/redirect target and approve it to
+publish them. Underscore slugs must be changed to DNS labels first. The `minor-web`
+repository will need to use its new subdomain for future CI public health checks;
+this repository does not change application deployment scripts.
 The portfolio's stage badge remains on the portfolio and locator pages. Projects
 own their own environment indicators.
 
@@ -265,7 +285,7 @@ References: [Certbot manual hooks and renewal](https://eff-certbot.readthedocs.i
    publisher applies each environment's nginx configuration atomically with
    validation and rollback. Project targets are still resolved per request.
 3. Verify the site, `/dev`, `/dev/panel`, and an approved running project's
-   subdomain/entry URL on each stand. Planning projects keep their card without a
+   subdomain URL on each stand. Planning projects keep their card without a
    launch link. Roll back by setting the variable to false and redeploying; TLS
    files and Docker networks may remain available for a later activation.
 

@@ -139,6 +139,24 @@ increments the revision; owner/service edits return to `pending` and require a
 new review. The admin request list displays the submitted target. Pending,
 rejected and revoked projects cannot be routed by the registry gateway.
 
+Migration `005-project-hosts.sql` converts the existing `minor-website` record
+with slug `minor-web` and an empty legacy target to a proxy through its stable
+private gateway: port `18100` on prod, `18101` on dev, base path
+`/dev/project/minor-web`. The project's own CI can keep rotating backend ports
+without changing this target. The public project opens at `/` on its subdomain;
+the retired portfolio entry paths still return 404. Internal redirect prefixes,
+private redirect ports and cookie paths are translated at the outer gateway.
+The compatibility loopback hop receives the public `Host`.
+
+The migration preserves IDs, tokens, owners, approval/revocation and readiness,
+and increments only a converted row's revision. Already configured routes,
+including planning projects, are preserved. Migration version/checksum tracking
+makes it run once, in the same transaction as the other startup migrations;
+later manual target changes survive restarts. The standard database names
+`itzephir_locator_dev` / `itzephir_locator_prod` determine the stand. Set optional
+`LOCATOR_ENVIRONMENT=dev|prod` for custom database names; migration fails and rolls
+back if a matching legacy record exists but the stand cannot be determined.
+
 The catalog, panel and resolve API return direct project subdomain URLs for
 configured projects. The catalog selects production or dev according to its
 hostname. After operator DNS/TLS enrollment, `PREFIX.SLUG.itzephir.com` and

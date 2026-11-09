@@ -97,6 +97,8 @@ def routing_locations(target, namespace=None):
         auth_request /_locator_resolve;
         auth_request_set $project_upstream $upstream_http_x_project_upstream;
         auth_request_set $project_uri $upstream_http_x_project_uri;
+        auth_request_set $project_base_path $upstream_http_x_project_base_path;
+        auth_request_set $project_gateway_port $upstream_http_x_project_path_gateway_port;
         auth_request_set $project_host $upstream_http_x_project_upstream_host;
         auth_request_set $project_tls_name $upstream_http_x_project_tls_name;
         auth_request_set $project_redirect $upstream_http_location;
@@ -106,6 +108,9 @@ def routing_locations(target, namespace=None):
         proxy_pass $project_upstream$project_uri;
         proxy_http_version 1.1;
         proxy_redirect $project_upstream/ /;
+        proxy_redirect http://$host:$project_gateway_port$project_base_path/ /;
+        proxy_redirect $project_base_path/ /;
+        proxy_cookie_path $project_base_path/ /;
         proxy_set_header Host $project_host;
         proxy_set_header X-Forwarded-Host $host;
         proxy_set_header X-Real-IP $remote_addr;

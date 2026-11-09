@@ -33,10 +33,14 @@ internal suspend fun ApplicationCall.gateway(project: Project?) {
         else -> {
             val upstream = routing.upstream()
             val uri = URI(upstream)
+            val pathGateway = uri.scheme == "http" && uri.host == "127.0.0.1" &&
+                uri.port in listOf(18100, 18101) && uri.rawPath == "/dev/project/${project.slug}"
             response.header("X-Project-Upstream", upstream)
             response.header("X-Project-URI", original)
+            response.header("X-Project-Base-Path", uri.rawPath.orEmpty().trimEnd('/'))
+            if (pathGateway) response.header("X-Project-Path-Gateway-Port", uri.port.toString())
             // Docker targets are project routers. External proxies may require their own virtual host.
-            response.header("X-Project-Upstream-Host", if (routing.mode == RoutingMode.DOCKER) host else uri.rawAuthority)
+            response.header("X-Project-Upstream-Host", if (routing.mode == RoutingMode.DOCKER || pathGateway) host else uri.rawAuthority)
             response.header("X-Project-TLS-Name", uri.host)
             respond(HttpStatusCode.NoContent)
         }

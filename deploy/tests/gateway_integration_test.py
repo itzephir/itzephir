@@ -46,10 +46,12 @@ class GatewayIntegrationTest(unittest.TestCase):
         namespace_certificate, namespace_key = root / "namespace-cert.pem", root / "namespace-key.pem"
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
                         "-subj", "/CN=project-namespaces", "-addext",
-                        "subjectAltName=" + ",".join(f"DNS:*.{slug}.{domain}" for slug in ("app", "other", "redirect", "proxy")
+                        "subjectAltName=" + ",".join(f"DNS:*.{slug}.{domain}" for slug in ("app", "other", "redirect", "proxy", "minor-web")
                                                      for domain in ("itzephir.com", "dev.itzephir.com")),
                         "-keyout", str(namespace_key), "-out", str(namespace_certificate)], check=True, capture_output=True)
         gateway_port, prod_gateway_port, backend_port, tls_port, http_port, https_port = [free_port() for _ in range(6)]
+        compatibility = {stand: free_port() for stand in ("dev", "prod")}
+        next_backend_port = free_port()
         resolutions = []
 
         class Backend(BaseHTTPRequestHandler):
@@ -80,10 +82,15 @@ class GatewayIntegrationTest(unittest.TestCase):
                         target = f"http://app-container:{backend_port}"
                         if slug == "tls": target = f"https://tls-backend:{tls_port}"
                         if slug == "proxy": target = f"https://tls-backend:{tls_port}/base"
+                        if slug == "minor-web":
+                            stand = "dev" if self.server.server_port == gateway_port else "prod"
+                            target = f"http://127.0.0.1:{compatibility[stand]}/dev/project/minor-web"
+                            self.send_header("X-Project-Path-Gateway-Port", str(compatibility[stand]))
                         if slug == "bad-tls": target = f"https://app-container:{tls_port}"
                         self.send_header("X-Project-Upstream", target)
                         self.send_header("X-Project-URI", original)
-                        self.send_header("X-Project-Upstream-Host", host if slug in {"app", "other"} else urlsplit(target).netloc)
+                        self.send_header("X-Project-Base-Path", urlsplit(target).path.rstrip("/"))
+                        self.send_header("X-Project-Upstream-Host", host if slug in {"app", "other", "minor-web"} else urlsplit(target).netloc)
                         self.send_header("X-Project-TLS-Name", urlsplit(target).hostname)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
@@ -100,6 +107,12 @@ class GatewayIntegrationTest(unittest.TestCase):
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
+                if self.path == "/relative-redirect":
+                    self.send_response(302)
+                    self.send_header("Location", "/login?q=1")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
                 self.echo()
 
             def do_POST(self): self.echo()
@@ -110,6 +123,8 @@ class GatewayIntegrationTest(unittest.TestCase):
                                       "host": self.headers.get("Host"), "forwarded": self.headers.get("X-Forwarded-Host")}).encode()
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
+                self.send_header("X-Test-Backend", str(self.server.server_port))
+                if self.path == "/cookie": self.send_header("Set-Cookie", "session=value; Path=/; HttpOnly")
                 self.send_header("Content-Length", str(len(payload)))
                 self.end_headers()
                 self.wfile.write(payload)
@@ -129,6 +144,7 @@ class GatewayIntegrationTest(unittest.TestCase):
         server(gateway_port)
         server(prod_gateway_port)
         server(backend_port)
+        server(next_backend_port)
         server(tls_port, tls=True)
 
         class DNS(socketserver.BaseRequestHandler):
@@ -145,7 +161,24 @@ class GatewayIntegrationTest(unittest.TestCase):
         self.addCleanup(dns.server_close)
         self.addCleanup(dns.shutdown)
         generated = "\n".join(nginx.with_registry_gateway((DEPLOY / f"nginx/{target}.conf").read_text(), target,
-                                                        ["app", "other", "redirect", "proxy"]) for target in ("prod", "dev"))
+                                                        ["app", "other", "redirect", "proxy", "minor-web"]) for target in ("prod", "dev"))
+        # Existing project CI changes these snippets when rotating its own containers.
+        routes = root / "routes"
+        routes.mkdir()
+        def write_route(stand, port):
+            (routes / f"minor-web-{stand}.conf").write_text(f"""
+location ^~ /dev/project/minor-web/ {{
+    proxy_pass http://127.0.0.1:{port}/;
+    proxy_set_header Host $host;
+    proxy_redirect / /dev/project/minor-web/;
+    proxy_cookie_path / /dev/project/minor-web/;
+}}
+""")
+        for stand in ("dev", "prod"): write_route(stand, backend_port)
+        private = (DEPLOY / "nginx/project-gateway.conf").read_text().replace("/etc/nginx/projects/", str(routes) + "/")
+        for stand, port in (("prod", 18100), ("dev", 18101)):
+            private = private.replace(f"127.0.0.1:{port}", f"127.0.0.1:{compatibility[stand]}")
+        generated += "\n" + private
         generated = generated.replace("listen 80;", f"listen 127.0.0.1:{http_port};").replace("listen [::]:80;", "")
         generated = generated.replace("listen 443 ssl;", f"listen 127.0.0.1:{https_port} ssl;").replace("listen [::]:443 ssl;", "")
         generated = generated.replace("127.0.0.1:18081", f"127.0.0.1:{gateway_port}")
@@ -153,7 +186,7 @@ class GatewayIntegrationTest(unittest.TestCase):
         generated = generated.replace("127.0.0.1:18554", f"127.0.0.1:{dns.server_address[1]}")
         generated = generated.replace("127.0.0.1:18553", f"127.0.0.1:{dns.server_address[1]}")
         for target in ("prod", "dev"):
-            for slug in ("app", "other", "redirect", "proxy"):
+            for slug in ("app", "other", "redirect", "proxy", "minor-web"):
                 generated = generated.replace(f"/etc/letsencrypt/live/itzephir-project-{target}-{slug}/fullchain.pem", str(namespace_certificate))
                 generated = generated.replace(f"/etc/letsencrypt/live/itzephir-project-{target}-{slug}/privkey.pem", str(namespace_key))
         for name in ("itzephir.com", "itzephir-projects-dev", "itzephir-projects-prod"):
@@ -239,6 +272,28 @@ class GatewayIntegrationTest(unittest.TestCase):
         self.assertEqual(status, 302)
         self.assertTrue(headers["Location"].endswith("/login"))
         self.assertNotIn("tls-backend", headers["Location"])
+        for stand, domain in (("prod", "itzephir.com"), ("dev", "dev.itzephir.com")):
+            host = f"minor-web.{domain}"
+            status, headers, payload = request(host, "/a%20b?q=a%2Fb")
+            self.assertEqual(status, 200)
+            self.assertEqual(json.loads(payload), {"path": "/a%20b?q=a%2Fb", "method": "GET", "body": "", "host": host, "forwarded": host})
+            self.assertEqual(headers["X-Test-Backend"], str(backend_port))
+            status, headers, _ = request(host, "/relative-redirect")
+            self.assertEqual(status, 302)
+            self.assertTrue(headers["Location"].endswith("/login?q=1"), headers)
+            self.assertNotIn("/dev/project/", headers["Location"])
+            self.assertNotIn(str(compatibility[stand]), headers["Location"])
+            status, headers, _ = request(host, "/cookie")
+            self.assertEqual(status, 200)
+            self.assertIn("Path=/;", headers["Set-Cookie"])
+            self.assertNotIn("/dev/project/", headers["Set-Cookie"])
+        write_route("dev", next_backend_port)
+        subprocess.run(["nginx", "-p", str(root), "-c", str(configuration), "-s", "reload"], check=True, capture_output=True)
+        for _ in range(50):
+            if request("minor-web.dev.itzephir.com")[1].get("X-Test-Backend") == str(next_backend_port): break
+            time.sleep(.05)
+        else: self.fail("The migrated target did not follow the project's container rotation")
+        self.assertEqual(request("minor-web.itzephir.com")[1]["X-Test-Backend"], str(backend_port))
         status, headers, _ = request("pr-42.app.dev.itzephir.com", "/upstream-redirect")
         self.assertEqual(status, 302)
         self.assertTrue(headers["Location"].endswith("/login"))
