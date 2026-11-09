@@ -233,6 +233,65 @@ class NginxPublishingTest(unittest.TestCase):
             with self.subTest(slug=slug), self.assertRaises(ValueError):
                 nginx.with_registry_gateway((DEPLOY / "nginx/dev.conf").read_text(), "dev", [slug])
 
+    def enable_routing(self, target):
+        path = self.publisher.directory / f"{target}.conf"
+        path.write_text(nginx.with_registry_gateway(path.read_text(), target))
+
+    def test_namespace_acquisition_activates_once_and_preserves_other_stand_and_release_rollback(self):
+        self.bootstrap()
+        self.enable_routing("prod")
+        dev = (self.publisher.directory / "dev.conf").read_bytes()
+        state = self.publisher.directory / ".prod-rollback.json"
+        state.write_text('{"release":"existing"}')
+        self.publisher.activate_namespace("prod", "anyq")
+        self.publisher.activate_namespace("prod", "other")
+        self.commands.clear()
+        self.publisher.activate_namespace("prod", "anyq")
+        actual = (self.publisher.directory / "prod.conf").read_text()
+        self.assertIn("itzephir-project-prod-anyq/fullchain.pem", actual)
+        self.assertIn("set $locator_slug anyq;", actual)
+        self.assertIn("itzephir-project-prod-other/fullchain.pem", actual)
+        self.assertEqual(json.loads((self.publisher.namespaces / "prod.json").read_text()), ["anyq", "other"])
+        self.assertEqual((self.publisher.directory / "dev.conf").read_bytes(), dev)
+        self.assertEqual(state.read_text(), '{"release":"existing"}')
+        self.assertFalse(any(command[:2] == ["systemctl", "reload"] for command in self.commands))
+
+    def test_failed_namespace_activation_restores_both_manifest_and_active_routes(self):
+        for existing in (False, True):
+            with self.subTest(existing=existing):
+                self.bootstrap()
+                self.enable_routing("prod")
+                if existing:
+                    self.publisher.activate_namespace("prod", "anyq")
+                manifest = self.publisher.namespaces / "prod.json"
+                before_manifest = manifest.read_bytes() if manifest.exists() else None
+                config = self.publisher.directory / "prod.conf"
+                before = config.read_bytes()
+                failed = []
+                def runner(command):
+                    if command == ["systemctl", "reload", "nginx"] and not failed:
+                        failed.append(True)
+                        raise subprocess.CalledProcessError(1, command)
+                original = self.publisher.runner
+                self.publisher.runner = runner
+                with self.assertRaises(subprocess.CalledProcessError):
+                    self.publisher.activate_namespace("prod", "failed")
+                self.publisher.runner = original
+                self.assertEqual(config.read_bytes(), before)
+                self.assertEqual(manifest.read_bytes() if manifest.exists() else None, before_manifest)
+
+    def test_namespace_activation_requires_enabled_base_and_a_valid_tls_preflight(self):
+        self.bootstrap()
+        with self.assertRaisesRegex(ValueError, "Enable base"):
+            self.publisher.activate_namespace("dev", "anyq")
+        self.enable_routing("dev")
+        before = (self.publisher.directory / "dev.conf").read_bytes()
+        self.publisher.runner = lambda command: (_ for _ in ()).throw(subprocess.CalledProcessError(1, command))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publisher.activate_namespace("dev", "anyq")
+        self.assertFalse((self.publisher.namespaces / "dev.json").exists())
+        self.assertEqual((self.publisher.directory / "dev.conf").read_bytes(), before)
+
 
 if __name__ == "__main__":
     unittest.main()

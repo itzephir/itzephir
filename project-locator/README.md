@@ -159,10 +159,14 @@ back if a matching legacy record exists but the stand cannot be determined.
 
 The catalog, panel and resolve API return direct project subdomain URLs for
 configured projects. The catalog selects production or dev according to its
-hostname. After operator DNS/TLS enrollment, `PREFIX.SLUG.itzephir.com` and
+hostname. After one-time namespace acquisition through the main-only
+[infrastructure workflow](../deploy/README.md#enable-a-projects-hostname-namespace), `PREFIX.SLUG.itzephir.com` and
 `PREFIX.SLUG.dev.itzephir.com` select exactly the same slug/target as their base
 host in the corresponding locator. The single-label prefix is opaque to itzephir;
-the project owns its dev/prod/PR interpretation and deployment.
+the project owns its dev/prod/PR interpretation and deployment. Acquisition
+automates exact/wildcard DNS, TLS, renewal verification and gateway activation;
+additional prefix names require no infrastructure changes. It never changes
+locator records, approval, readiness or project deployments.
 The reverse proxy serves the application at `/`, supports request bodies and
 WebSocket upgrades, resolves Docker names dynamically, verifies upstream HTTPS,
 and forwards the public host/protocol in `X-Forwarded-Host` / `X-Forwarded-Proto`.

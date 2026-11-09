@@ -195,7 +195,9 @@ www, dev and mail records; do not publish AAAA unless the VM supports IPv6.
 After this change is merged, run **Prepare project routing infrastructure** from
 `main`, first for `dev`, then for `prod`. It is an explicit infrastructure job;
 ordinary PR checks and project approval never run provisioning. The job prepares
-the chosen environment and leaves route activation to normal website deployment.
+the chosen base environment and leaves base route activation to normal website
+deployment. Supplying `namespace` instead acquires and activates that project's
+DNS/TLS namespace in one run, after base routing is already enabled.
 
 Configure the GitHub environment `infrastructure` with deployment restricted to
 `main` (and the desired reviewer protection):
@@ -203,7 +205,8 @@ Configure the GitHub environment `infrastructure` with deployment restricted to
 - `INFRA_SSH_KEY`: a dedicated root SSH key for provisioning, separate from the
   restricted `deploy` account key. Install its public key through the VM owner.
 - `TIMEWEB_DNS_TOKEN`: a Timeweb Cloud API token permitted to list/create/delete
-  DNS records for `itzephir.com`. Use the narrowest permissions Timeweb supports.
+  DNS records and create subdomain resources for `itzephir.com`. Use the narrowest
+  permissions Timeweb supports.
   Configure it as an environment secret; do not paste it into issues or commits.
 - Existing repository secrets `DEPLOY_HOST` and `DEPLOY_KNOWN_HOSTS` are reused.
 - Optional environment variable `ACME_EMAIL`: contact for ACME registration on a
@@ -254,7 +257,7 @@ TXT record ID created by its auth invocation. It waits up to 20 minutes for each
 TXT cache only after every authoritative server has the new validation. This
 avoids caching an old wildcard TXT while Timeweb is still synchronizing its DNS
 servers, and allows an already cached response to expire. The workflow has a
-60-minute budget for issuance and the renewal check. Existing TXT/SPF/MX/A records
+90-minute budget for namespace DNS propagation, issuance and the renewal check. Existing TXT/SPF/MX/A records
 and concurrent validations are preserved.
 An interrupted process before cleanup can leave a stale challenge TXT; remove
 only that recorded validation after checking that no issuance is in progress.
@@ -314,59 +317,74 @@ Unknown/pending/revoked/planning projects still return 404. A prefix equal to a
 second registered slug does not switch projects. Other depths are deliberately
 rejected: standard wildcard TLS certificates cover exactly one label.
 
-Base routing above must already be prepared. For each project and locator stand:
+Base routing above must already be prepared **and enabled** for the chosen
+locator. Each project needs one acquisition per locator, not one per prefix.
+For example, `dev.anyq.itzephir.com` belongs to the **prod locator**; `dev` is an
+opaque prefix interpreted by anyq, not the workflow's `target`.
+
+For each project and locator:
 
 1. Register its target in that locator, configure the application to accept its
    public hostnames, set readiness to `development`, and approve the record.
    A Docker target can be the project's own router; project CI manages its
    services behind that router. No application deployment is added to itzephir.
-2. In Timeweb, point **both the exact name and its wildcard** to the existing
-   gateway VM, preserving mail and unrelated records:
+2. Run **Prepare project routing infrastructure** from `main`, supplying the
+   locator `target` and project `namespace`. To acquire anyq's namespace for
+   `dev.anyq.itzephir.com`:
+
+   ```sh
+   gh workflow run project-routing-infrastructure.yml --ref main -f target=prod -f namespace=anyq
+   ```
+
+   No manual Timeweb edit or follow-up website deployment is needed. PR checks
+   never run acquisition. Leaving `namespace` empty retains the separate base
+   infrastructure preparation described above.
+3. The workflow reads the single IPv4 A address of the locator's existing common
+   wildcard (`*.itzephir.com` or `*.dev.itzephir.com`). It checks **both** project
+   names for conflicts before writing, then creates only missing subdomain
+   resources/A records through Timeweb's FQDN-scoped v2 API:
 
    | Locator | Exact A record | Wildcard A record |
    | --- | --- | --- |
    | prod | `anyq` | `*.anyq` |
    | dev | `anyq.dev` | `*.anyq.dev` |
 
-   These are names relative to the `itzephir.com` zone. Do not rely on the common
-   wildcard for the exact name: adding a wildcard/TXT child creates a DNS node
-   that can prevent fallback to the parent wildcard. Use the privately configured
-   VM address; do not publish an AAAA record without working IPv6. Check resolution
-   of both `anyq[.dev].itzephir.com` and `routing-probe.anyq[.dev].itzephir.com`
-   from authoritative and recursive DNS before proceeding.
-3. After the infrastructure change is merged, run **Prepare project routing
-   infrastructure** from `main` with `target=dev`, `namespace=anyq`; repeat with
-   `target=prod` when needed. Leaving `namespace` empty prepares base routing.
-   The project wildcard is issued separately as
+   These are names relative to `itzephir.com`. Exact names are required because
+   a wildcard/TXT child can prevent fallback to the common wildcard. A different
+   A address, CNAME or AAAA record stops acquisition instead of being overwritten.
+   Existing TXT/MX and unrelated records are preserved. The workflow verifies
+   both the exact address and `routing-probe` through every authoritative server,
+   then a recursive resolver, before requesting TLS. The gateway address is never
+   supplied manually or printed. A partial DNS/API failure is safe to retry;
+   records already created are retained and reused.
+4. The project wildcard is issued separately as
    `/etc/letsencrypt/live/itzephir-project-dev-anyq/` or
    `itzephir-project-prod-anyq/`. Existing common/root certificates are preserved.
    The same unattended DNS-01 renewal and validated nginx deploy hook apply.
-4. Provisioning checks the new certificate and staging renewal, validates the
-   complete future nginx configuration, then atomically adds only the slug to
-   `/etc/itzephir/project-namespaces/dev.json` or `prod.json` (root-owned).
-   Repeating enrollment is safe and adding another slug preserves earlier ones.
-   A failed issuance, renewal check or nginx preflight does not enroll the slug.
-   Namespace preparation does not rebuild/restart project containers, change
-   targets or activate nginx. The manifests are infrastructure enrollment, not
-   another service registry.
-5. Run a normal website deployment for that locator stand with
-   `PROJECT_ROUTING_ENABLED=true`. It reads the persistent manifest and publishes
-   the namespace servers with their own certificates and a fixed resolver slug.
-   For dev, rerun the PR's **Website CI/CD** run (or open a small follow-up PR);
-   for production, rerun the `main` push run after the merge. Manual workflow
-   dispatch is build/test only. Ordinary project target changes
-   subsequently take effect on the next request without provisioning/redeploying
-   nginx. Changing the project's slug requires separate enrollment for the new
-   name; old certificates/enrollment do not grant access after registry removal.
+5. After certificate and staging renewal checks pass, the publisher validates
+   the complete future nginx configuration, persists only the slug in
+   `/etc/itzephir/project-namespaces/dev.json` or `prod.json` (root-owned), and
+   activates the gateway with the project's certificate and fixed resolver slug.
+   Manifest and active configuration roll back together on validation/reload
+   failure. Other namespaces, the other locator and application-release rollback
+   state are preserved. A failed issuance/renewal/preflight does not enroll the
+   slug; previously created DNS records may remain for retry. Repeating a
+   successful acquisition creates no duplicate records; unchanged gateway files
+   require no reload. No project container, target, approval or application
+   release changes. The manifests are infrastructure enrollment, not a registry.
+   Later ordinary website deployments continue to read this manifest.
 6. Verify the base address, a project-defined prefix, path/query, upload,
    application redirects and WebSocket endpoint. Verify an unregistered slug and
    a revoked project cannot reach the application. A prefixed host uses the same
    locator target as the base address; it is the application's job to select a
-   concrete stand.
+   concrete stand. New prefix names require no further DNS, certificates or
+   infrastructure runs. Target changes take effect on the next request. Renaming
+   the project's slug requires separate acquisition; old certificates/enrollment
+   do not grant access after registry removal.
 
 For an operator running the committed scripts directly, the equivalent is
-`sudo bash deploy/prepare-project-routing.sh dev /PRIVATE/TOKEN_FILE anyq`, followed
-by normal CI deployment. Never put the token value in arguments. To disable one
+`sudo bash deploy/prepare-project-routing.sh prod /PRIVATE/TOKEN_FILE anyq`.
+Never put the token value in arguments. To disable one
 namespace, remove its slug from the corresponding root-owned JSON manifest and
 redeploy that stand; keep certificates until no active/rollback nginx config
 references them. To stop project access immediately, revoke it in the locator.

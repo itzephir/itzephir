@@ -120,6 +120,29 @@ class DNSHookTest(unittest.TestCase):
         self.assertEqual(list(api.records()), [{"id": 1}, {"id": 2}])
         self.assertEqual(api.pages, ["?limit=100&offset=0", "?limit=100&offset=1"])
 
+    def test_namespace_api_uses_exact_fqdn_resources_and_v2_record_schema(self):
+        requests = []
+        class Opener:
+            def open(self, request, timeout):
+                requests.append(request)
+                return io.BytesIO(b'{}')
+        api = hook.Timeweb("unused", Opener())
+        api.add_subdomain("*.anyq.dev")
+        api.request("POST", payload={"type": "A", "value": "192.0.2.10", "ttl": 300},
+                    fqdn="*.anyq.dev.itzephir.com", version="v2")
+        self.assertEqual(requests[0].full_url, "https://api.timeweb.cloud/api/v1/domains/itzephir.com/subdomains/%2A.anyq.dev")
+        self.assertEqual(requests[1].full_url, "https://api.timeweb.cloud/api/v2/domains/%2A.anyq.dev.itzephir.com/dns-records")
+        self.assertEqual(json.loads(requests[1].data), {"type": "A", "value": "192.0.2.10", "ttl": 300})
+
+    def test_only_explicitly_optional_missing_dns_resources_are_accepted(self):
+        class Opener:
+            def open(self, request, timeout):
+                raise HTTPError(request.full_url, 404, "missing", {}, io.BytesIO(b'private response'))
+        api = hook.Timeweb("unused", Opener())
+        self.assertIsNone(api.request("GET", fqdn="anyq.itzephir.com", missing_ok=True))
+        with self.assertRaisesRegex(RuntimeError, "HTTP 404"):
+            api.request("GET", fqdn="anyq.itzephir.com")
+
     def test_slow_authority_does_not_prime_recursive_cache_with_previous_record(self):
         elapsed = [0]
         cached_until = [0]

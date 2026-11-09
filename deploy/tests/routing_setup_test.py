@@ -78,12 +78,44 @@ elif name == "nginx":
     if "-c" in args and os.getenv("FAIL_NGINX_PREFLIGHT"): stop(1)
     stop(1 if args == ["-t"] and os.getenv("FAIL_NGINX") else 0)
 elif name == "dig":
-    print("127.0.0.2")
+    print("ns1.example.invalid." if args[-1] == "NS" else
+          "192.0.2.10" if args[-2].endswith("itzephir.com") else "127.0.0.2")
     stop()
 elif name in ("systemctl", "sleep"): stop()
 save()
 raise AssertionError((name, args))
 """
+
+# Only the isolated copy imports this transport; production code keeps the fixed HTTPS API.
+DNS_API = r'''
+class Timeweb:
+    def __init__(self, token): pass
+
+    def request(self, method, suffix="", payload=None, *, fqdn=ZONE, version="v1", missing_ok=False):
+        state_path = Path(os.environ["ROUTING_TEST_STATE"])
+        state = json.loads(state_path.read_text())
+        if os.getenv("FAIL_NAMESPACE_DNS"): raise RuntimeError("DNS provider unavailable")
+        state["calls"].append(["timeweb", method, fqdn])
+        records = state.setdefault("dns", {
+            "*.itzephir.com": [{"type": "A", "data": {"value": "192.0.2.10"}}],
+            "*.dev.itzephir.com": [{"type": "A", "data": {"value": "192.0.2.10"}}],
+        })
+        if method == "GET":
+            rows = records.get(fqdn)
+            state_path.write_text(json.dumps(state))
+            return None if rows is None else {"dns_records": rows, "meta": {"total": len(rows)}}
+        assert method == "POST" and version == "v2"
+        records[fqdn].append({"type": payload["type"], "data": {"value": payload["value"]}})
+        state_path.write_text(json.dumps(state))
+        return {}
+
+    def add_subdomain(self, relative):
+        state_path = Path(os.environ["ROUTING_TEST_STATE"])
+        state = json.loads(state_path.read_text())
+        state["calls"].append(["timeweb", "subdomain", relative])
+        state["dns"][relative + "." + ZONE] = []
+        state_path.write_text(json.dumps(state))
+'''
 
 
 @unittest.skipUnless(os.getenv("PROJECT_ROUTING_REQUIRE_PROVISION_TESTS") == "true",
@@ -100,6 +132,15 @@ class RoutingSetupTest(unittest.TestCase):
         self.temporary = tempfile.TemporaryDirectory()
         self.addCleanup(self.temporary.cleanup)
         self.root = Path(self.temporary.name)
+        self.package = self.root / "deploy"
+        self.package.mkdir()
+        for name in ("prepare-project-routing.sh", "setup-project-certificates.sh", "setup-project-routing.sh",
+                     "setup-project-namespace-dns.py", "timeweb-dns-hook.py", "renew-project-certificate.sh",
+                     "apply-nginx.py", "project-dns-container.sh"):
+            shutil.copyfile(DEPLOY / name, self.package / name)
+        shutil.copytree(DEPLOY / "coredns", self.package / "coredns")
+        with (self.package / "timeweb-dns-hook.py").open("a") as transport:
+            transport.write(DNS_API)
         tools = self.root / "bin"
         tools.mkdir()
         for name in ("docker", "certbot", "nginx", "dig", "systemctl", "sleep"):
@@ -124,10 +165,18 @@ class RoutingSetupTest(unittest.TestCase):
         self.env.pop("ACME_EMAIL", None)
 
     def run_setup(self, target="dev", namespace="", **extra):
-        return subprocess.run(["bash", str(DEPLOY / "prepare-project-routing.sh"), target, str(self.token), namespace],
+        return subprocess.run(["bash", str(self.package / "prepare-project-routing.sh"), target, str(self.token), namespace],
                               env={**self.env, **extra}, capture_output=True, text=True)
 
     def saved(self): return json.loads(self.state.read_text())
+
+    def enable_routing(self, target):
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("publisher", DEPLOY / "apply-nginx.py")
+        publisher = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(publisher)
+        path = Path(f"/etc/nginx/itzephir/{target}.conf")
+        path.write_text(publisher.with_registry_gateway(path.read_text(), target))
 
     def test_real_scripts_preserve_root_tls_and_separate_stands_on_retry(self):
         for target in ("dev", "prod", "dev"):
@@ -161,13 +210,15 @@ class RoutingSetupTest(unittest.TestCase):
                 self.assertFalse(self.saved()["containers"])
                 self.assertFalse(Path("/usr/local/sbin/itzephir-apply-nginx").exists())
 
-    def test_namespace_certificates_are_separate_and_enrollment_does_not_change_docker_or_routes(self):
+    def test_namespace_acquisition_creates_dns_tls_and_routes_without_changing_project_containers(self):
         for target in ("dev", "prod"):
             result = self.run_setup(target)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.enable_routing(target)
         before = self.saved()
-        configs = {target: Path(f"/etc/nginx/itzephir/{target}.conf").read_bytes() for target in ("dev", "prod")}
         for target in ("dev", "prod", "dev"):
+            other = "prod" if target == "dev" else "dev"
+            other_config = Path(f"/etc/nginx/itzephir/{other}.conf").read_bytes()
             result = self.run_setup(target, "anyq")
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             lineage = f"itzephir-project-{target}-anyq"
@@ -175,17 +226,25 @@ class RoutingSetupTest(unittest.TestCase):
             certificate = f"/etc/letsencrypt/live/{lineage}/fullchain.pem"
             subprocess.run(["openssl", "x509", "-in", certificate, "-noout", "-checkhost", f"pr-42.{domain}"], check=True, capture_output=True)
             self.assertEqual(json.loads(Path(f"/etc/itzephir/project-namespaces/{target}.json").read_text()), ["anyq"])
-            self.assertEqual(Path(f"/etc/nginx/itzephir/{target}.conf").read_bytes(), configs[target])
+            active = Path(f"/etc/nginx/itzephir/{target}.conf").read_text()
+            self.assertIn(certificate, active)
+            self.assertIn("set $locator_slug anyq;", active)
+            self.assertEqual(Path(f"/etc/nginx/itzephir/{other}.conf").read_bytes(), other_config)
+            for name in (domain, "*." + domain):
+                self.assertEqual(self.saved()["dns"][name], [{"type": "A", "data": {"value": "192.0.2.10"}}])
             self.assertTrue(any(call[:2] == ["certbot", "renew"] and lineage in call for call in self.saved()["calls"]))
         after = self.saved()
         self.assertEqual(before["containers"], after["containers"])
         self.assertEqual(before["networks"], after["networks"])
         later_calls = after["calls"][len(before["calls"]):]
         self.assertFalse(any(call[0] == "docker" and call[1] != "info" for call in later_calls))
-        for failure in ("FAIL_CERTIFICATE", "FAIL_RENEWAL", "FAIL_NGINX_PREFLIGHT"):
+        for failure in ("FAIL_NAMESPACE_DNS", "FAIL_CERTIFICATE", "FAIL_RENEWAL", "FAIL_NGINX_PREFLIGHT"):
+            before_config = Path("/etc/nginx/itzephir/dev.conf").read_bytes()
             result = self.run_setup("dev", "failed", **{failure: "true"})
             self.assertNotEqual(result.returncode, 0)
             self.assertEqual(json.loads(Path("/etc/itzephir/project-namespaces/dev.json").read_text()), ["anyq"])
+            self.assertEqual(Path("/etc/nginx/itzephir/dev.conf").read_bytes(), before_config)
+        self.assertNotIn(self.token.read_text(), result.stdout + result.stderr)
 
     def test_namespace_requires_base_preparation_and_rejects_unsafe_names(self):
         result = self.run_setup("dev", "anyq")
@@ -193,6 +252,11 @@ class RoutingSetupTest(unittest.TestCase):
         self.assertFalse(any(call[0] == "certbot" for call in self.saved()["calls"]))
         result = self.run_setup()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        result = self.run_setup("dev", "anyq")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Enable base project routing", result.stderr)
+        self.assertFalse(any(call[0] == "timeweb" for call in self.saved()["calls"]))
+        self.enable_routing("dev")
         before = len(self.saved()["calls"])
         for slug in ("dev", "opendesign", "www", "../prod", "anyq.dev", "a_b", "a" * 64):
             result = self.run_setup("dev", slug)

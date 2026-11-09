@@ -4,12 +4,12 @@ on:
   workflow_dispatch:
     inputs:
       target:
-        description: Environment to prepare (wildcard DNS must already point to the VM)
+        description: Locator environment (base wildcard DNS must already point to the VM)
         type: choice
         required: true
         options: [dev, prod]
       namespace:
-        description: Optional registered project slug; prepare its wildcard TLS after base routing
+        description: Optional project slug; acquire DNS, wildcard TLS and active namespace in one run
         type: string
         required: false
 
@@ -20,7 +20,7 @@ jobs:
   prepare:
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
     environment: infrastructure
     concurrency:
       group: itzephir-project-routing-infrastructure
@@ -62,7 +62,7 @@ jobs:
           printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > "$work/known_hosts"
           printf '%s' "$TIMEWEB_DNS_TOKEN" > "$work/token"
           printf '%s' "$ACME_EMAIL" > "$work/acme-email"
-          tar -czf "$work/routing.tar.gz" deploy/prepare-project-routing.sh deploy/setup-project-certificates.sh \
+          tar -czf "$work/routing.tar.gz" deploy/prepare-project-routing.sh deploy/setup-project-certificates.sh deploy/setup-project-namespace-dns.py \
             deploy/timeweb-dns-hook.py deploy/renew-project-certificate.sh deploy/setup-project-routing.sh deploy/apply-nginx.py \
             deploy/project-dns-container.sh deploy/coredns/Corefile
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
@@ -72,6 +72,11 @@ jobs:
           {
             echo "### Project routing infrastructure: $TARGET"
             echo 'Wildcard certificate issued; staging renewal checked; certbot.timer enabled.'
-            echo 'Nginx publisher installed and nginx -t passed; namespace preparation leaves project deployments intact.'
-            echo 'Prepare both environments before enabling PROJECT_ROUTING_ENABLED and deploying normally.'
+            if [[ -n "$NAMESPACE" ]]; then
+              echo "Namespace: $NAMESPACE — exact/wildcard DNS verified and gateway activated."
+              echo 'Project containers, locator records and application releases are managed separately.'
+            else
+              echo 'Nginx publisher installed and nginx -t passed.'
+              echo 'Prepare both environments before enabling PROJECT_ROUTING_ENABLED and deploying normally.'
+            fi
           } >> "$GITHUB_STEP_SUMMARY"
