@@ -38,7 +38,9 @@ class FakeAPI:
 
 class DNSHookTest(unittest.TestCase):
     def test_auth_and_cleanup_preserve_mail_and_other_acme_validations(self):
-        for domain, subdomain in [("*.itzephir.com", "_acme-challenge"), ("dev.itzephir.com", "_acme-challenge.dev")]:
+        for domain, subdomain in [("*.itzephir.com", "_acme-challenge"), ("dev.itzephir.com", "_acme-challenge.dev"),
+                                  ("*.anyq.itzephir.com", "_acme-challenge.anyq"),
+                                  ("*.anyq.dev.itzephir.com", "_acme-challenge.anyq.dev")]:
             with self.subTest(domain=domain):
                 api = FakeAPI()
                 before = list(api.saved)
@@ -70,7 +72,9 @@ class DNSHookTest(unittest.TestCase):
         self.assertEqual(api.calls, [])
 
     def test_unrelated_domains_and_invalid_validations_are_rejected(self):
-        for domain in ("example.com", "foo.itzephir.com", "itzephir.com.example.org", "ITZEPHIR.com"):
+        for domain in ("example.com", "www.itzephir.com", "opendesign.dev.itzephir.com", "dev.dev.itzephir.com",
+                       "foo.bar.itzephir.com", "foo.bar.dev.itzephir.com", "-foo.itzephir.com", "foo_.itzephir.com",
+                       "a" * 64 + ".itzephir.com", "itzephir.com.example.org", "ITZEPHIR.com"):
             with self.assertRaises(ValueError):
                 hook.challenge(domain, VALUE)
         with self.assertRaises(ValueError):

@@ -15,6 +15,7 @@ import threading
 import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 DEPLOY = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("gateway_nginx", DEPLOY / "apply-nginx.py")
@@ -29,7 +30,7 @@ def free_port():
 
 
 class GatewayIntegrationTest(unittest.TestCase):
-    def test_proxy_redirect_legacy_dns_tls_and_websocket(self):
+    def test_namespaces_proxy_redirect_retired_paths_dns_tls_and_websocket(self):
         if os.getenv("PROJECT_ROUTING_REQUIRE_NGINX_TESTS") != "true":
             self.skipTest("run in the dedicated nginx container; runner nginx may predate http2 on")
         if not shutil.which("nginx"):
@@ -40,9 +41,16 @@ class GatewayIntegrationTest(unittest.TestCase):
         (root / "logs").mkdir()
         certificate, key = root / "cert.pem", root / "key.pem"
         subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
-                        "-subj", "/CN=tls-backend", "-addext", "subjectAltName=DNS:tls-backend,DNS:*.dev.itzephir.com",
+                        "-subj", "/CN=tls-backend", "-addext", "subjectAltName=DNS:tls-backend,DNS:*.dev.itzephir.com,DNS:*.itzephir.com",
                         "-keyout", str(key), "-out", str(certificate)], check=True, capture_output=True)
-        gateway_port, backend_port, tls_port, http_port, https_port = [free_port() for _ in range(5)]
+        namespace_certificate, namespace_key = root / "namespace-cert.pem", root / "namespace-key.pem"
+        subprocess.run(["openssl", "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "1",
+                        "-subj", "/CN=project-namespaces", "-addext",
+                        "subjectAltName=" + ",".join(f"DNS:*.{slug}.{domain}" for slug in ("app", "other", "redirect", "proxy")
+                                                     for domain in ("itzephir.com", "dev.itzephir.com")),
+                        "-keyout", str(namespace_key), "-out", str(namespace_certificate)], check=True, capture_output=True)
+        gateway_port, prod_gateway_port, backend_port, tls_port, http_port, https_port = [free_port() for _ in range(6)]
+        resolutions = []
 
         class Backend(BaseHTTPRequestHandler):
             def log_message(self, *_): pass
@@ -59,29 +67,36 @@ class GatewayIntegrationTest(unittest.TestCase):
                     return
                 if self.path.startswith("/api/project-locator/v1/gateway/"):
                     slug = self.path.rsplit("/", 1)[-1]
-                    entry = self.headers.get("X-Project-Entry") == "true"
                     original = self.headers.get("X-Original-URI")
+                    host = self.headers.get("X-Project-Host")
+                    resolutions.append(("dev" if self.server.server_port == gateway_port else "prod", slug, host))
                     if slug in {"missing", "pending", "revoked"}:
                         self.send_response(403)
-                    elif slug == "redirect" or (entry and slug != "legacy"):
+                    elif slug == "redirect":
                         self.send_response(403)
-                        self.send_header("Location", "https://example.org/exact?q=1" if slug == "redirect" else
-                                         f"https://{slug}.dev.itzephir.com" + original.split(slug, 1)[1])
+                        self.send_header("Location", "https://example.org/exact?q=1")
                     else:
                         self.send_response(204)
                         target = f"http://app-container:{backend_port}"
                         if slug == "tls": target = f"https://tls-backend:{tls_port}"
+                        if slug == "proxy": target = f"https://tls-backend:{tls_port}/base"
                         if slug == "bad-tls": target = f"https://app-container:{tls_port}"
                         self.send_header("X-Project-Upstream", target)
                         self.send_header("X-Project-URI", original)
-                        self.send_header("X-Project-Upstream-Host", target.split("//")[1])
-                        self.send_header("X-Project-TLS-Name", target.split("//")[1].split(":")[0])
+                        self.send_header("X-Project-Upstream-Host", host if slug in {"app", "other"} else urlsplit(target).netloc)
+                        self.send_header("X-Project-TLS-Name", urlsplit(target).hostname)
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
                 if self.path == "/upstream-redirect":
                     self.send_response(302)
                     self.send_header("Location", f"http://app-container:{backend_port}/login")
+                    self.send_header("Content-Length", "0")
+                    self.end_headers()
+                    return
+                if self.path == "/base/upstream-redirect":
+                    self.send_response(302)
+                    self.send_header("Location", f"https://tls-backend:{tls_port}/base/login")
                     self.send_header("Content-Length", "0")
                     self.end_headers()
                     return
@@ -112,6 +127,7 @@ class GatewayIntegrationTest(unittest.TestCase):
             return instance
 
         server(gateway_port)
+        server(prod_gateway_port)
         server(backend_port)
         server(tls_port, tls=True)
 
@@ -128,12 +144,19 @@ class GatewayIntegrationTest(unittest.TestCase):
         threading.Thread(target=dns.serve_forever, daemon=True).start()
         self.addCleanup(dns.server_close)
         self.addCleanup(dns.shutdown)
-        generated = nginx.with_registry_gateway((DEPLOY / "nginx/dev.conf").read_text(), "dev")
+        generated = "\n".join(nginx.with_registry_gateway((DEPLOY / f"nginx/{target}.conf").read_text(), target,
+                                                        ["app", "other", "redirect", "proxy"]) for target in ("prod", "dev"))
         generated = generated.replace("listen 80;", f"listen 127.0.0.1:{http_port};").replace("listen [::]:80;", "")
         generated = generated.replace("listen 443 ssl;", f"listen 127.0.0.1:{https_port} ssl;").replace("listen [::]:443 ssl;", "")
         generated = generated.replace("127.0.0.1:18081", f"127.0.0.1:{gateway_port}")
+        generated = generated.replace("127.0.0.1:18080", f"127.0.0.1:{prod_gateway_port}")
         generated = generated.replace("127.0.0.1:18554", f"127.0.0.1:{dns.server_address[1]}")
-        for name in ("itzephir.com", "itzephir-projects-dev"):
+        generated = generated.replace("127.0.0.1:18553", f"127.0.0.1:{dns.server_address[1]}")
+        for target in ("prod", "dev"):
+            for slug in ("app", "other", "redirect", "proxy"):
+                generated = generated.replace(f"/etc/letsencrypt/live/itzephir-project-{target}-{slug}/fullchain.pem", str(namespace_certificate))
+                generated = generated.replace(f"/etc/letsencrypt/live/itzephir-project-{target}-{slug}/privkey.pem", str(namespace_key))
+        for name in ("itzephir.com", "itzephir-projects-dev", "itzephir-projects-prod"):
             generated = generated.replace(f"/etc/letsencrypt/live/{name}/fullchain.pem", str(certificate))
             generated = generated.replace(f"/etc/letsencrypt/live/{name}/privkey.pem", str(key))
         generated = generated.replace("/etc/ssl/certs/ca-certificates.crt", str(certificate))
@@ -152,38 +175,78 @@ class GatewayIntegrationTest(unittest.TestCase):
 
         def request(host, path="/", method="GET", body=None):
             connection = http.client.HTTPSConnection("127.0.0.1", https_port, context=context, timeout=5)
-            connection.request(method, path, body=body, headers={"Host": host})
+            connection.request(method, path, body=body, headers={"Host": host, "X-Forwarded-Host": "spoofed.example"})
             response = connection.getresponse()
             result = response.status, dict(response.getheaders()), response.read()
             connection.close()
             return result
 
-        status, headers, _ = request("dev.itzephir.com", "/dev/project/app/docs?q=1")
-        self.assertEqual(status, 307)
-        self.assertEqual(headers["Location"], "https://app.dev.itzephir.com/docs?q=1")
-        self.assertEqual(request("dev.itzephir.com", "/dev/projects/app/docs")[0], 307)
-        self.assertEqual(request("dev.itzephir.com", "/__staging-project/app/")[0], 404)
-        status, headers, _ = request("dev.itzephir.com", "/dev/project/redirect/?private=secret")
-        self.assertEqual(status, 307)
-        self.assertEqual(headers["Location"], "https://example.org/exact?q=1")
+        for host in ("itzephir.com", "dev.itzephir.com"):
+            for path in ("/dev/project/app/docs?q=1", "/dev/projects/app/docs", "/dev/project", "/dev/projects",
+                         "/__staging-project/app/", "/dev/project/redirect/?private=secret"):
+                status, headers, _ = request(host, path)
+                self.assertEqual(status, 404, (host, path))
+                self.assertNotIn("Location", headers)
+        self.assertFalse(resolutions)
         for slug in ["missing", "pending", "revoked"]:
             self.assertEqual(request(f"{slug}.dev.itzephir.com")[0], 404)
             self.assertEqual(request("dev.itzephir.com", f"/dev/project/{slug}/")[0], 404)
         status, _, payload = request("app.dev.itzephir.com", "/api?q=a%2Fb", "POST", "request-body")
         self.assertEqual(status, 200, (root / "error.log").read_text())
         self.assertEqual(json.loads(payload), {"path": "/api?q=a%2Fb", "method": "POST", "body": "request-body",
-                                              "host": f"app-container:{backend_port}", "forwarded": "app.dev.itzephir.com"})
+                                              "host": "app.dev.itzephir.com", "forwarded": "app.dev.itzephir.com"})
+        # Both environments coexist; the prefix cannot select another slug or locator stand.
+        for stand, domain in (("prod", "itzephir.com"), ("dev", "dev.itzephir.com")):
+            for prefix, slug in (("dev", "app"), ("pr-42", "app"), ("other", "app"), ("app", "other")):
+                host = f"{prefix}.{slug}.{domain}"
+                status, _, payload = request(host, "/nested/a%20b?x=a%2Fb&x=2", "POST", "namespace-body")
+                self.assertEqual(status, 200, (root / "error.log").read_text())
+                self.assertEqual(json.loads(payload), {"path": "/nested/a%20b?x=a%2Fb&x=2", "method": "POST",
+                                                      "body": "namespace-body", "host": host, "forwarded": host})
+                self.assertEqual(resolutions[-1], (stand, slug, host))
+                plain = http.client.HTTPConnection("127.0.0.1", http_port, timeout=5)
+                plain.request("GET", "/docs?q=a%2Fb", headers={"Host": host})
+                response = plain.getresponse()
+                self.assertEqual(response.status, 308)
+                self.assertEqual(response.getheader("Location"), f"https://{host}/docs?q=a%2Fb")
+                response.read()
+                plain.close()
+        for host in ("a.b.app.itzephir.com", "a.b.app.dev.itzephir.com", "dev.app.itzephir.com.evil.org", "-bad.app.itzephir.com",
+                     "a_b.app.dev.itzephir.com", "dev.unenrolled.itzephir.com"):
+            before = len(resolutions)
+            request(host)
+            self.assertEqual(len(resolutions), before, host)
+        # Real SNI and hostname verification: a common wildcard cannot serve the deeper name.
+        verified = ssl.create_default_context(cafile=str(certificate))
+        verified.load_verify_locations(cafile=str(namespace_certificate))
+        for host in ("app.itzephir.com", "app.dev.itzephir.com", "dev.app.itzephir.com", "pr-42.app.dev.itzephir.com"):
+            with verified.wrap_socket(socket.create_connection(("127.0.0.1", https_port)), server_hostname=host) as stream:
+                stream.sendall(f"GET / HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\n\r\n".encode())
+                self.assertIn(b"200", stream.recv(1024).split(b"\r\n", 1)[0])
+        with self.assertRaises(ssl.SSLCertVerificationError):
+            with verified.wrap_socket(socket.create_connection(("127.0.0.1", https_port)), server_hostname="a.b.app.itzephir.com"):
+                pass
+        status, headers, _ = request("dev.redirect.itzephir.com", "/private?q=secret")
+        self.assertEqual(status, 307)
+        self.assertEqual(headers["Location"], "https://example.org/exact?q=1")
         self.assertEqual(request("tls.dev.itzephir.com")[0], 200)
         self.assertEqual(request("bad-tls.dev.itzephir.com")[0], 502)
-        self.assertEqual(request("dev.itzephir.com", "/dev/project/legacy/asset.css")[0], 200)
-        status, headers, _ = request("app.dev.itzephir.com", "/upstream-redirect")
+        status, _, payload = request("pr-42.proxy.dev.itzephir.com", "/a%20b?q=a%2Fb")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(payload), {"path": "/base/a%20b?q=a%2Fb", "method": "GET", "body": "",
+                                              "host": f"tls-backend:{tls_port}", "forwarded": "pr-42.proxy.dev.itzephir.com"})
+        status, headers, _ = request("pr-42.proxy.dev.itzephir.com", "/upstream-redirect")
+        self.assertEqual(status, 302)
+        self.assertTrue(headers["Location"].endswith("/login"))
+        self.assertNotIn("tls-backend", headers["Location"])
+        status, headers, _ = request("pr-42.app.dev.itzephir.com", "/upstream-redirect")
         self.assertEqual(status, 302)
         self.assertTrue(headers["Location"].endswith("/login"))
         self.assertNotIn("app-container", headers["Location"])
-        connection = context.wrap_socket(socket.create_connection(("127.0.0.1", https_port)), server_hostname="app.dev.itzephir.com")
+        connection = verified.wrap_socket(socket.create_connection(("127.0.0.1", https_port)), server_hostname="pr-42.app.dev.itzephir.com")
         with connection:
             connection.settimeout(5)
-            connection.sendall(b"GET /socket HTTP/1.1\r\nHost: app.dev.itzephir.com\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
+            connection.sendall(b"GET /socket HTTP/1.1\r\nHost: pr-42.app.dev.itzephir.com\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n\r\n")
             received = b""
             while b"\r\n\r\n" not in received: received += connection.recv(1024)
             self.assertIn(b"101", received.split(b"\r\n", 1)[0])

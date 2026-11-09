@@ -2,13 +2,20 @@
 # Install Certbot DNS automation and issue one stand's certificate on the VM.
 set -euo pipefail
 [[ "$EUID" == 0 ]] || { echo 'Run as root' >&2; exit 1; }
-target="${1:?Usage: setup-project-certificates.sh dev|prod TOKEN_FILE}"
+target="${1:?Usage: setup-project-certificates.sh dev|prod TOKEN_FILE [SLUG]}"
 case "$target" in
     prod) domain=itzephir.com ;;
     dev) domain=dev.itzephir.com ;;
     *) echo 'Invalid environment' >&2; exit 1 ;;
 esac
 token_file="${2:?Missing private Timeweb DNS token file}"
+slug="${3:-}"
+lineage="itzephir-projects-$target"
+if [[ -n "$slug" ]]; then
+    [[ "$slug" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ && "$slug" != dev && "$slug" != www && "$slug" != opendesign ]] || { echo 'Invalid project namespace' >&2; exit 1; }
+    domain="$slug.$domain"
+    lineage="itzephir-project-$target-$slug"
+fi
 for command in certbot python3 dig openssl nginx systemctl flock; do command -v "$command" >/dev/null; done
 cd "$(dirname "$0")"
 
@@ -66,15 +73,15 @@ certbot certonly --non-interactive --manual --preferred-challenges dns \
     --manual-auth-hook '/usr/local/libexec/itzephir/timeweb-dns-hook auth' \
     --manual-cleanup-hook '/usr/local/libexec/itzephir/timeweb-dns-hook cleanup' \
     --deploy-hook /usr/local/libexec/itzephir/renew-project-certificate \
-    --cert-name "itzephir-projects-$target" --domain "*.$domain" \
+    --cert-name "$lineage" --domain "*.$domain" \
     --keep-until-expiring "${account_args[@]}"
-certificate="/etc/letsencrypt/live/itzephir-projects-$target/fullchain.pem"
+certificate="/etc/letsencrypt/live/$lineage/fullchain.pem"
 openssl x509 -in "$certificate" -noout -checkend 86400 >/dev/null
 openssl x509 -in "$certificate" -noout -checkhost "routing-probe.$domain" | grep -q 'does match certificate'
 # Exercise the saved renewal hooks against the staging CA; this does not replace the live cert.
-certbot renew --cert-name "itzephir-projects-$target" --dry-run --no-random-sleep-on-renew \
+certbot renew --cert-name "$lineage" --dry-run --no-random-sleep-on-renew \
     --server https://acme-staging-v02.api.letsencrypt.org/directory
 systemctl enable --now certbot.timer
 trap - EXIT INT TERM
 rm -f /etc/itzephir/.timeweb-dns.token.previous
-echo "Wildcard certificate and automatic renewal verified for $target"
+echo "Wildcard certificate and automatic renewal verified for $domain"

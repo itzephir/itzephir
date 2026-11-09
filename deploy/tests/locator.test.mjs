@@ -50,7 +50,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         async function register(project, approved = false) {
             const response = await fetch(`${base}/api/project-locator/v1/projects`, { method: 'POST',
                 headers: { 'Content-Type': 'application/json', ...(approved ? { Authorization: `Bearer ${apiToken}` } : {}) },
-                body: JSON.stringify({ project, slug: project.replaceAll('-', '_') }) });
+                body: JSON.stringify({ project, slug: project, routing: { mode: 'docker', target: 'project-router:8080' } }) });
             assert.equal(response.status, 201);
             return response.json();
         }
@@ -113,7 +113,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         assert.equal(new URL(publicPage.url()).pathname, '/');
         await publicPage.goto(`${base}/dev`);
         assert.equal(await publicPage.locator('.project-card').count(), 3);
-        assert.equal(await publicPage.locator(`a[href='/dev/project/${own.project.slug}/']`).count(), 1);
+        assert.equal(await publicPage.locator(`a[href='https://${own.project.slug}.itzephir.com/']`).count(), 1);
         await publicPage.screenshot({ path: resolve(output, 'development-1440.png'), fullPage: true });
         const ownerContext = await browser.newContext({ javaScriptEnabled: false, viewport: { width: 390, height: 900 } });
         const owner = await ownerContext.newPage();
@@ -132,7 +132,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         assert.equal((await owner.goto(`${panel}/new`)).status(), 403);
         await owner.goto(`${panel}/${own.project.id}/edit`);
         await owner.getByLabel('Имя проекта', { exact: true }).fill('minor-updated');
-        await owner.getByLabel('Slug в адресе', { exact: true }).fill('minor_updated');
+        await owner.getByLabel('Slug в адресе', { exact: true }).fill('minor-updated');
         await owner.getByRole('button', { name: 'Сохранить изменения' }).click();
         assert.equal(await owner.locator('.badge.pending').count(), 1);
         assert.ok(await owner.evaluate(() => document.documentElement.scrollWidth <= innerWidth), 'Owner form overflows on mobile');
@@ -152,7 +152,7 @@ test('project panel: JWT login, owner isolation, admin workflow, public landing 
         assert.ok(!(await ownerContext.cookies()).some(cookie => cookie.name === 'itzephir_locator_session'));
         await admin.goto(`${panel}/new`);
         await admin.getByLabel('Имя проекта', { exact: true }).fill('ui-created');
-        await admin.getByLabel('Slug в адресе', { exact: true }).fill('ui_created');
+        await admin.getByLabel('Slug в адресе', { exact: true }).fill('ui-created');
         await admin.getByLabel('Описание', { exact: true }).fill('Личный и семейный бюджет. Приложение ещё не опубликовано.');
         await admin.getByLabel('Готовность проекта', { exact: true }).selectOption('planning');
         await admin.getByLabel('Способ публикации', { exact: true }).selectOption('redirect');

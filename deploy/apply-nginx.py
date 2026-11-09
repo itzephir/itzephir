@@ -12,6 +12,15 @@ import tempfile
 
 DOMAINS = {"dev": {"dev.itzephir.com"}, "prod": {"itzephir.com", "www.itzephir.com"}}
 PORTS = {"dev": 18081, "prod": 18080}
+DNS_LABEL = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?"
+
+
+def validate_namespace(slug):
+    if not isinstance(slug, str) or not re.fullmatch(DNS_LABEL, slug) or slug in {"dev", "www", "opendesign"}:
+        raise ValueError("Namespace must be a project DNS label; dev, www and opendesign are reserved")
+    return slug
+
+
 TOKENS = re.compile(r'''"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|\#[^\n]*|[{};]|[^\s{};"'\#]+''')
 
 
@@ -66,23 +75,23 @@ def validate_environment(config, target):
 def without_project_gateway(config):
     config = re.sub(r"    # Managed project gateway;.*?(?=    location / \{)", "", config, flags=re.S)
     config = re.sub(r"    # Managed project routing v2 start.*?    # Managed project routing v2 end\n\n?", "", config, flags=re.S)
+    config = re.sub(r"    # Retired project paths start.*?    # Retired project paths end\n\n?", "", config, flags=re.S)
     return re.sub(r"\n# Managed project subdomains v2 start.*?# Managed project subdomains v2 end\n", "", config, flags=re.S)
 
 
 def without_staging_interceptor(config):
-    # Registry auth must run before deciding whether to invoke the legacy stage interceptor.
-    return re.sub(r"    # Legacy stage interceptor start\n.*?    # Legacy stage interceptor end\n\n?", "", config, flags=re.S)
+    # Remove interceptor blocks from already-published configurations and older templates.
+    config = re.sub(r"    # Legacy stage interceptor start\n.*?    # Legacy stage interceptor end\n\n?", "", config, flags=re.S)
+    return re.sub(r"    location \^~ /__staging-project/ \{.*?\n    \}\n\n?", "", config, flags=re.S)
 
 
-def routing_locations(target, entry):
+def routing_locations(target, namespace=None):
     port = PORTS[target]
     dns_port = 18553 if target == "prod" else 18554
-    selector = ('~ "^/dev/projects?/(?<entry_slug>[a-z0-9][a-z0-9_-]{0,63})(?:/.*)?$"' if entry else "/")
-    slug = "$entry_slug" if entry else "$app_slug"
+    slug = namespace or "$app_slug"
     return f"""    # Managed project routing v2 start
-    location {selector} {{
+    location / {{
         set $locator_slug {slug};
-        set $locator_entry {'true' if entry else 'false'};
         set $project_connection close;
         if ($http_upgrade != "") {{ set $project_connection upgrade; }}
         auth_request /_locator_resolve;
@@ -119,8 +128,6 @@ def routing_locations(target, entry):
         proxy_pass_request_body off;
         proxy_set_header Content-Length "";
         proxy_set_header X-Project-Host $host;
-        proxy_set_header X-Project-Entry $locator_entry;
-        proxy_set_header X-Project-Upgrade $http_upgrade;
         proxy_set_header X-Original-URI $request_uri;
         proxy_set_header Cookie "";
         proxy_set_header Authorization "";
@@ -135,24 +142,21 @@ def routing_locations(target, entry):
 """
 
 
-def with_registry_gateway(config, target):
+def with_registry_gateway(config, target, namespaces=()):
     """The registry selects a proxy or redirect on every request, without nginx writes."""
-    config = without_staging_interceptor(without_project_gateway(config))
+    config = with_retired_paths(config, target)
     host = "itzephir.com" if target == "prod" else "dev.itzephir.com"
-    for block in server_blocks(config):
-        if names(block) == {host} and re.search(r"\blisten\s+(?:\[::\]:)?443\s", block):
-            anchor = "    location / {"
-            if block.count(anchor) != 1:
-                raise ValueError("Expected one canonical portfolio location")
-            config = config.replace(block, block.replace(anchor, routing_locations(target, entry=True) + anchor, 1), 1)
-            break
-    else:
-        raise ValueError("Missing canonical HTTPS server for project routing")
-    # Do not use .domain wildcards: they also match nested names. Each slug is one DNS label.
-    pattern = f'"~^(?<app_slug>[a-z0-9](?:[a-z0-9-]{{0,61}}[a-z0-9])?)\\.{host.replace(".", r"\.")}$"'
-    certificate = f"/etc/letsencrypt/live/itzephir-projects-{target}"
-    return config + f"""
-# Managed project subdomains v2 start
+    # Regex names match exactly the depth covered by each certificate. The production
+    # pattern cannot consume anyq.dev.itzephir.com or a namespace from the other stand.
+    pattern = f'"~^(?<app_slug>{DNS_LABEL})\\.{re.escape(host)}$"'
+    servers = [(pattern, f"itzephir-projects-{target}", None)]
+    for slug in sorted(set(validate_namespace(slug) for slug in namespaces)):
+        pattern = f'"~^{DNS_LABEL}\\.{re.escape(slug + "." + host)}$"'
+        servers.append((pattern, f"itzephir-project-{target}-{slug}", slug))
+    config += "\n# Managed project subdomains v2 start\n"
+    for pattern, lineage, namespace in servers:
+        certificate = f"/etc/letsencrypt/live/{lineage}"
+        config += f"""
 server {{
     listen 80;
     listen [::]:80;
@@ -169,25 +173,19 @@ server {{
     ssl_protocols TLSv1.2 TLSv1.3;
     server_tokens off;
     add_header X-Content-Type-Options nosniff always;
-{routing_locations(target, entry=False)}}}
-# Managed project subdomains v2 end
+{routing_locations(target, namespace=namespace)}}}
 """
+    return config + "# Managed project subdomains v2 end\n"
 
 
-def with_project_gateway(config, target):
-    """Keep existing project deployments working until DNS/TLS and registry routing are enabled."""
-    config = without_project_gateway(config)
+def with_retired_paths(config, target):
+    """Public project entry paths are gone, even when subdomain routing is disabled."""
+    config = without_staging_interceptor(without_project_gateway(config))
     host = "itzephir.com" if target == "prod" else "dev.itzephir.com"
-    port = 18100 if target == "prod" else 18101
-    locations = f"""    # Managed project gateway; application deployments own their routes.
-    location ^~ /dev/project/ {{
-        proxy_pass http://127.0.0.1:{port};
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }}
+    locations = """    # Retired project paths start
+    location ~ "^/dev/projects?(?:/|$)" { return 404; }
+    location ~ "^/__staging-project(?:/|$)" { return 404; }
+    # Retired project paths end
 
 """
     for block in server_blocks(config):
@@ -196,7 +194,7 @@ def with_project_gateway(config, target):
             if block.count(anchor) != 1:
                 raise ValueError("Expected one canonical portfolio location")
             return config.replace(block, block.replace(anchor, locations + anchor, 1), 1)
-    raise ValueError("Missing canonical HTTPS server for project routing")
+    raise ValueError("Missing canonical HTTPS server")
 
 
 def write_atomic(path, content):
@@ -221,8 +219,16 @@ def read_optional(path):
 
 
 class Publisher:
-    def __init__(self, directory=Path("/etc/nginx/itzephir"), site=Path("/etc/nginx/sites-available/itzephir.com"), lock=Path("/run/lock/itzephir-nginx.lock"), runner=subprocess.check_call):
+    def __init__(self, directory=Path("/etc/nginx/itzephir"), site=Path("/etc/nginx/sites-available/itzephir.com"), lock=Path("/run/lock/itzephir-nginx.lock"), runner=subprocess.check_call, namespaces=Path("/etc/itzephir/project-namespaces")):
         self.directory, self.site, self.lock, self.runner = directory, site, lock, runner
+        self.namespaces = namespaces
+
+    def namespace_slugs(self, target):
+        path = self.namespaces / f"{target}.json"
+        values = json.loads(path.read_text()) if path.exists() else []
+        if not isinstance(values, list):
+            raise ValueError("Expected a list of project namespaces")
+        return sorted(set(validate_namespace(slug) for slug in values))
 
     def locked(self):
         self.lock.parent.mkdir(parents=True, exist_ok=True)
@@ -277,23 +283,32 @@ class Publisher:
             changes[self.site] = wrapper
             self.switch(changes)
 
+    def check_candidate(self, target, namespaces):
+        config = with_registry_gateway((self.directory / f"{target}.conf").read_text(), target, namespaces)
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", prefix="itzephir-routing-") as candidate:
+            candidate.write("events {}\nhttp {\n" + config + "\n}\n")
+            candidate.flush()
+            self.runner(["nginx", "-t", "-c", candidate.name])
+
+    def prepare_namespace(self, target, slug):
+        with self.locked():
+            slugs = sorted(set(self.namespace_slugs(target) + [validate_namespace(slug)]))
+            self.check_candidate(target, slugs)
+            write_atomic(self.namespaces / f"{target}.json", (json.dumps(slugs) + "\n").encode())
+
     def check_routing(self, target):
         # Validate the future wildcard servers without changing active files or reloading.
         with self.locked():
-            config = with_registry_gateway((self.directory / f"{target}.conf").read_text(), target)
-            with tempfile.NamedTemporaryFile(mode="w", suffix=".conf", prefix="itzephir-routing-") as candidate:
-                candidate.write("events {}\nhttp {\n" + config + "\n}\n")
-                candidate.flush()
-                self.runner(["nginx", "-t", "-c", candidate.name])
+            self.check_candidate(target, self.namespace_slugs(target))
 
     def publish(self, target, release, source):
         config = without_project_gateway(source.read_text())
         validate_environment(config, target)
         enabled = (source.parent / "enable-project-routing").is_file()
-        config = (with_registry_gateway if enabled else with_project_gateway)(config, target)
         destination = self.directory / f"{target}.conf"
         state = self.directory / f".{target}-rollback.json"
         with self.locked():
+            config = with_registry_gateway(config, target, self.namespace_slugs(target)) if enabled else with_retired_paths(config, target)
             previous = destination.read_text()
             old_state = read_optional(state)
             write_atomic(state, json.dumps({"release": release, "previous": previous}).encode())
@@ -320,12 +335,15 @@ def main(args):
     if os.geteuid() != 0:
         raise PermissionError("Run through the configured sudo command")
     publisher = Publisher()
+    if len(args) == 3 and args[0] == "--prepare-namespace" and args[1] in DOMAINS:
+        publisher.prepare_namespace(args[1], args[2])
+        return
     if len(args) == 2 and args[0] == "--check-routing" and args[1] in DOMAINS:
         publisher.check_routing(args[1])
         return
     if args == ["--projects"]:
         with publisher.locked():
-            publisher.switch({publisher.directory / f"{target}.conf": with_project_gateway((publisher.directory / f"{target}.conf").read_text(), target).encode() for target in DOMAINS})
+            publisher.switch({publisher.directory / f"{target}.conf": with_retired_paths((publisher.directory / f"{target}.conf").read_text(), target).encode() for target in DOMAINS})
         return
     if len(args) == 2 and args[0] == "--bootstrap":
         publisher.bootstrap(Path(args[1]))

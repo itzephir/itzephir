@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -17,7 +18,7 @@ class NginxPublishingTest(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.commands = []
         self.fail_command = None
-        self.publisher = nginx.Publisher(self.root / "managed", self.root / "site.conf", self.root / "lock", self.run_command)
+        self.publisher = nginx.Publisher(self.root / "managed", self.root / "site.conf", self.root / "lock", self.run_command, self.root / "namespaces")
 
     def run_command(self, command):
         self.commands.append(command)
@@ -48,12 +49,12 @@ class NginxPublishingTest(unittest.TestCase):
         source = self.root / "release.conf"
         source.write_bytes(before.replace(b"gzip_comp_level 6;", b"gzip_comp_level 5;"))
         self.publisher.publish("dev", "release-1", source)
-        self.assertEqual(dev_path.read_bytes(), nginx.with_project_gateway(source.read_text(), "dev").encode())
+        self.assertEqual(dev_path.read_bytes(), nginx.with_retired_paths(source.read_text(), "dev").encode())
         self.assertEqual((self.publisher.directory / "prod.conf").read_bytes(), prod_before)
         self.assertEqual(self.commands, [["nginx", "-t"], ["systemctl", "reload", "nginx"]])
         with self.assertRaises(ValueError):
             self.publisher.rollback("dev", "another-release")
-        self.assertEqual(dev_path.read_bytes(), nginx.with_project_gateway(source.read_text(), "dev").encode())
+        self.assertEqual(dev_path.read_bytes(), nginx.with_retired_paths(source.read_text(), "dev").encode())
         self.publisher.rollback("dev", "release-1")
         self.assertEqual(dev_path.read_bytes(), before)
 
@@ -96,19 +97,46 @@ class NginxPublishingTest(unittest.TestCase):
         self.assertFalse((self.publisher.directory / "prod.conf").exists())
         self.assertFalse((self.publisher.directory / "dev.conf").exists())
 
-    def test_production_publish_preserves_project_routes_for_old_release_templates(self):
+    def test_publication_removes_legacy_routes_even_without_subdomain_activation(self):
         self.bootstrap()
         source = DEPLOY / "nginx/prod.conf"
         self.publisher.publish("prod", "release-1", source)
         actual = (self.publisher.directory / "prod.conf").read_text()
-        self.assertIn("location ^~ /dev/project/", actual)
+        self.assertIn('location ~ "^/dev/projects?(?:/|$)" { return 404; }', actual)
         self.assertNotIn("location ^~ /project/", actual)
-        self.assertEqual(actual.count("proxy_pass http://127.0.0.1:18100;"), 1)
+        self.assertNotIn("18100", actual)
         self.assertIn("proxy_pass http://127.0.0.1:18080;", actual)
-        self.assertEqual(nginx.with_project_gateway(actual, "prod"), actual)
-        dev = nginx.with_project_gateway((DEPLOY / "nginx/dev.conf").read_text(), "dev")
-        self.assertIn("proxy_pass http://127.0.0.1:18101;", dev)
-        self.assertIn("location ^~ /dev/project/", dev)
+        self.assertEqual(nginx.with_retired_paths(actual, "prod"), actual)
+        dev = nginx.with_retired_paths((DEPLOY / "nginx/dev.conf").read_text(), "dev")
+        self.assertNotIn("18101", dev)
+        self.assertNotIn("rewrite ^/dev/project/", dev)
+
+    def test_old_published_path_proxy_and_stage_interceptor_are_removed_on_upgrade(self):
+        for target, port in (("prod", 18100), ("dev", 18101)):
+            config = (DEPLOY / f"nginx/{target}.conf").read_text()
+            old = f"""    # Legacy stage interceptor start
+    rewrite ^/dev/project/(.*)$ /__staging-project/$1 last;
+    # Legacy stage interceptor end
+
+    location ^~ /__staging-project/ {{
+        internal;
+        proxy_pass http://127.0.0.1:{nginx.PORTS[target]};
+    }}
+
+    # Managed project gateway; application deployments own their routes.
+    location ^~ /dev/project/ {{
+        proxy_pass http://127.0.0.1:{port};
+    }}
+
+"""
+            config = config.replace("    location / {\n", old + "    location / {\n")
+            for render in (nginx.with_registry_gateway, nginx.with_retired_paths):
+                actual = render(config, target)
+                self.assertNotIn(str(port), actual)
+                self.assertNotIn("rewrite ^/dev/project/", actual)
+                self.assertNotIn("location ^~ /__staging-project/", actual)
+                self.assertIn('location ~ "^/dev/projects?(?:/|$)" { return 404; }', actual)
+                self.assertEqual(render(actual, target), actual)
 
     def test_routing_preflight_checks_generated_tls_without_publishing_or_reloading(self):
         self.bootstrap()
@@ -143,7 +171,7 @@ class NginxPublishingTest(unittest.TestCase):
             with self.subTest(config=config), self.assertRaises(ValueError):
                 nginx.validate_environment(config, "dev")
 
-    def test_registry_routing_is_opt_in_and_rolls_back_to_the_legacy_gateway(self):
+    def test_registry_routing_is_opt_in_and_rollback_restores_previous_configuration(self):
         self.bootstrap()
         source = self.root / "dev.conf"
         source.write_text((DEPLOY / "nginx/dev.conf").read_text())
@@ -160,10 +188,50 @@ class NginxPublishingTest(unittest.TestCase):
         self.assertNotIn("location ^~ /dev/project/", actual)
         self.assertEqual(nginx.with_registry_gateway(actual, "dev"), actual)
         self.assertNotIn("rewrite ^/dev/project/", actual)
-        self.assertIn("location ^~ /__staging-project/", actual)
+        self.assertNotIn("location ^~ /__staging-project/", actual)
         self.assertEqual(nginx.without_project_gateway(actual).strip(), nginx.without_staging_interceptor(source.read_text()).strip())
         self.publisher.rollback("dev", "registry-release")
         self.assertEqual((self.publisher.directory / "dev.conf").read_bytes(), before)
+
+    def test_namespace_preparation_is_additive_isolated_and_requires_successful_preflight(self):
+        self.bootstrap()
+        before = (self.publisher.directory / "dev.conf").read_bytes()
+        self.publisher.prepare_namespace("dev", "anyq")
+        self.publisher.prepare_namespace("dev", "other")
+        self.publisher.prepare_namespace("dev", "anyq")
+        manifest = self.publisher.namespaces / "dev.json"
+        self.assertEqual(json.loads(manifest.read_text()), ["anyq", "other"])
+        self.assertEqual((self.publisher.directory / "dev.conf").read_bytes(), before)
+        self.assertFalse((self.publisher.namespaces / "prod.json").exists())
+        self.assertTrue(all(command[:3] == ["nginx", "-t", "-c"] for command in self.commands))
+        self.publisher.runner = lambda command: (_ for _ in ()).throw(subprocess.CalledProcessError(1, command))
+        with self.assertRaises(subprocess.CalledProcessError):
+            self.publisher.prepare_namespace("dev", "failed")
+        self.assertEqual(json.loads(manifest.read_text()), ["anyq", "other"])
+
+    def test_namespace_servers_persist_across_releases_and_disable_with_routing(self):
+        self.bootstrap()
+        self.publisher.prepare_namespace("dev", "anyq")
+        source = self.root / "dev.conf"
+        source.write_text((DEPLOY / "nginx/dev.conf").read_text())
+        (self.root / "enable-project-routing").touch()
+        for release in ("first", "second"):
+            self.publisher.publish("dev", release, source)
+            actual = (self.publisher.directory / "dev.conf").read_text()
+            self.assertIn("itzephir-project-dev-anyq/fullchain.pem", actual)
+            self.assertIn("set $locator_slug anyq;", actual)
+            self.assertNotIn("itzephir-project-prod-anyq", actual)
+            self.assertEqual(nginx.with_registry_gateway(actual, "dev", ["anyq"]), actual)
+        (self.root / "enable-project-routing").unlink()
+        self.publisher.publish("dev", "disabled", source)
+        self.assertNotIn("itzephir-project-dev-anyq", (self.publisher.directory / "dev.conf").read_text())
+        self.publisher.rollback("dev", "disabled")
+        self.assertEqual((self.publisher.directory / "dev.conf").read_text(), actual)
+
+    def test_namespace_input_cannot_inject_nginx_or_escape_its_environment(self):
+        for slug in ("dev", "www", "opendesign", "anyq.dev", "../prod", "a;return 200", "a_b", "-a", "a" * 64, 1):
+            with self.subTest(slug=slug), self.assertRaises(ValueError):
+                nginx.with_registry_gateway((DEPLOY / "nginx/dev.conf").read_text(), "dev", [slug])
 
 
 if __name__ == "__main__":

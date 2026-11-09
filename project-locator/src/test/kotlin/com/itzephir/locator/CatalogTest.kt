@@ -75,11 +75,27 @@ class CatalogTest : LocatorDatabaseTest() {
         }
         val current = locator.get(id, admin)
         locator.update(id, ProjectUpdate("itzmoney", "itzmoney", current.revision, request.routing, readiness = ProjectReadiness.DEVELOPMENT), admin)
-        assertEquals(1, Jsoup.parse(client.get("/dev").bodyAsText()).select("a[href='/dev/project/itzmoney/']").size)
+        assertEquals(1, Jsoup.parse(client.get("/dev").bodyAsText()).select("a[href='https://itzmoney.itzephir.com/']").size)
         val launched = client.get("/api/project-locator/v1/gateway/itzmoney") {
-            header("X-Project-Host", "itzephir.com"); header("X-Project-Entry", "true"); header("X-Original-URI", "/dev/project/itzmoney/")
+            header("X-Project-Host", "itzmoney.itzephir.com"); header("X-Original-URI", "/")
         }
         assertEquals(request.routing.target, launched.headers[HttpHeaders.Location])
+    }
+
+    @Test fun `catalog links use the current locator stand and unconfigured records have no launch URL`() = testApplication {
+        val admin = locator.authenticate(TEST_ADMIN)!!
+        locator.register(ProjectRequest("app", "app", ProjectRouting(RoutingMode.DOCKER, "app:8080")), admin)
+        locator.register(ProjectRequest("unconfigured", "under_score"), admin)
+        application { projectLocator(locator) }
+        for ((host, target) in listOf("itzephir.com" to "https://app.itzephir.com/", "dev.itzephir.com" to "https://app.dev.itzephir.com/")) {
+            val html = client.get("/dev") { header(HttpHeaders.Host, host) }.bodyAsText()
+            val cards = Jsoup.parse(html)
+            assertEquals(listOf(target), cards.select("a.project-link").map { it.attr("href") })
+            assertFalse(html.contains("/dev/project/"))
+        }
+        val resolved = Json.parseToJsonElement(client.get("/api/project-locator/v1/resolve/app").bodyAsText()).jsonObject
+        assertEquals("https://app.itzephir.com/", resolved.getValue("productionUrl").jsonPrimitive.content)
+        assertEquals("https://app.dev.itzephir.com/", resolved.getValue("stageUrl").jsonPrimitive.content)
     }
 
     @Test fun `catalog metadata persists through API updates and older clients preserve omitted fields`() = testApplication {

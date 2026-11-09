@@ -46,7 +46,6 @@ fun Application.module(
 ) {
     if (stagingBadge) {
         install(StagingBadge)
-        stagingProjectGateway()
     }
     if (locator != null) projectLocator(
         locator, secureCookies, panelAuth, developmentRenderer(secureCookies, neighborNames),

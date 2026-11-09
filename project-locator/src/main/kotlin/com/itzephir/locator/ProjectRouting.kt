@@ -16,9 +16,10 @@ enum class RoutingMode {
 
 @Serializable
 data class ProjectRouting(val mode: RoutingMode = RoutingMode.LEGACY, val target: String = "") {
+    internal fun hasSubdomain(slug: String) = mode != RoutingMode.LEGACY && DNS_LABEL.matches(slug) && slug !in RESERVED
+
     fun validate(slug: String) {
-        if (mode in listOf(RoutingMode.DOCKER, RoutingMode.PROXY) &&
-            (!DNS_LABEL.matches(slug) || slug in RESERVED)) invalid("Для поддомена используйте до 63 букв, цифр и дефисов; dev, www и opendesign зарезервированы.")
+        if (mode != RoutingMode.LEGACY && !hasSubdomain(slug)) invalid("Для поддомена используйте до 63 букв, цифр и дефисов; dev, www и opendesign зарезервированы.")
         if (mode == RoutingMode.LEGACY) {
             if (target.isNotEmpty()) invalid("У существующего маршрута нет адреса назначения.")
             return

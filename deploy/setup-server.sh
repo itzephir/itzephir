@@ -9,9 +9,6 @@ if ! dpkg-query -W openjdk-21-jre-headless >/dev/null 2>&1; then
     DEBIAN_FRONTEND=noninteractive apt-get install -y openjdk-21-jre-headless
 fi
 
-install -d -m 755 /etc/nginx/projects
-install -m 644 nginx/project-gateway.conf /etc/nginx/conf.d/project-gateway.conf
-
 install -d -m 755 /etc/itzephir
 printf 'BIND_HOST=127.0.0.1\nPORT=18080\nCOOKIE_SECURE=true\n' > /etc/itzephir/prod.env
 printf 'BIND_HOST=127.0.0.1\nPORT=18081\nCOOKIE_SECURE=true\n' > /etc/itzephir/dev.env
