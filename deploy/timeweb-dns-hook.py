@@ -15,10 +15,11 @@ import subprocess
 import sys
 import time
 from urllib.error import HTTPError, URLError
+from urllib.parse import quote
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 ZONE = "itzephir.com"
-API = "https://api.timeweb.cloud/api/v1"
+API = "https://api.timeweb.cloud"
 TOKEN = Path("/etc/itzephir/timeweb-dns.token")
 
 
@@ -42,8 +43,17 @@ class Timeweb:
         self.token = token
         self.opener = opener or build_opener(NoRedirect())
 
-    def request(self, method, suffix="", payload=None):
-        request = Request(API + "/domains/" + ZONE + "/dns-records" + suffix,
+    def request(self, method, suffix="", payload=None, *, fqdn=ZONE, version="v1", missing_ok=False):
+        if version not in {"v1", "v2"}:
+            raise ValueError("Unsupported Timeweb API version")
+        path = f"/api/{version}/domains/{quote(fqdn, safe='')}/dns-records{suffix}"
+        return self.api_request(method, path, payload, missing_ok=missing_ok)
+
+    def add_subdomain(self, relative):
+        return self.api_request("POST", f"/api/v1/domains/{ZONE}/subdomains/{quote(relative, safe='')}")
+
+    def api_request(self, method, path, payload=None, *, missing_ok=False):
+        request = Request(API + path,
                           data=json.dumps(payload).encode() if payload is not None else None,
                           headers={"Authorization": "Bearer " + self.token, "Content-Type": "application/json",
                                    "Accept": "application/json", "User-Agent": "itzephir-certbot-dns"}, method=method)
@@ -52,6 +62,8 @@ class Timeweb:
                 content = response.read()
                 return json.loads(content) if content else {}
         except HTTPError as error:
+            if method == "GET" and missing_ok and error.code == 404:
+                return None
             if method == "DELETE" and error.code == 404:
                 return {}
             # Never include response bodies, authorization headers or credentials in logs.

@@ -301,6 +301,19 @@ class Publisher:
             self.check_candidate(target, slugs)
             write_atomic(self.namespaces / f"{target}.json", (json.dumps(slugs) + "\n").encode())
 
+    def activate_namespace(self, target, slug):
+        with self.locked():
+            slugs = sorted(set(self.namespace_slugs(target) + [validate_namespace(slug)]))
+            destination = self.directory / f"{target}.conf"
+            current = destination.read_text()
+            if "# Managed project subdomains v2 start" not in current:
+                raise ValueError("Enable base project routing before acquiring a namespace")
+            self.check_candidate(target, slugs)
+            config = with_registry_gateway(current, target, slugs)
+            # Persist enrollment and activate together; switch restores both on failure.
+            self.switch({self.namespaces / f"{target}.json": (json.dumps(slugs) + "\n").encode(),
+                         destination: config.encode()})
+
     def check_routing(self, target):
         # Validate the future wildcard servers without changing active files or reloading.
         with self.locked():
@@ -340,6 +353,9 @@ def main(args):
     if os.geteuid() != 0:
         raise PermissionError("Run through the configured sudo command")
     publisher = Publisher()
+    if len(args) == 3 and args[0] == "--activate-namespace" and args[1] in DOMAINS:
+        publisher.activate_namespace(args[1], args[2])
+        return
     if len(args) == 3 and args[0] == "--prepare-namespace" and args[1] in DOMAINS:
         publisher.prepare_namespace(args[1], args[2])
         return
