@@ -8,6 +8,10 @@ on:
         type: choice
         required: true
         options: [dev, prod]
+      namespace:
+        description: Optional registered project slug; prepare its wildcard TLS after base routing
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -33,12 +37,16 @@ jobs:
           DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
           DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
           TARGET: ${{ inputs.target }}
+          NAMESPACE: ${{ inputs.namespace }}
         run: |
           set -euo pipefail
           for setting in INFRA_SSH_KEY TIMEWEB_DNS_TOKEN DEPLOY_HOST DEPLOY_KNOWN_HOSTS; do
             [[ -n "${!setting}" ]] || { echo "Missing infrastructure setting: $setting" >&2; exit 1; }
           done
           [[ "$TARGET" == dev || "$TARGET" == prod ]]
+          if [[ -n "$NAMESPACE" ]]; then
+            [[ "$NAMESPACE" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ && "$NAMESPACE" != dev && "$NAMESPACE" != www && "$NAMESPACE" != opendesign ]]
+          fi
           # Validate the SSH destination before passing it to ssh/scp or a cleanup trap.
           [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]*$ ]]
           umask 077
@@ -60,10 +68,10 @@ jobs:
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" "install -d -m 700 '$remote'"
           scp "${ssh_args[@]}" "$work/routing.tar.gz" "$work/token" "$work/acme-email" "root@$DEPLOY_HOST:$remote/"
           ssh "${ssh_args[@]}" "root@$DEPLOY_HOST" \
-            "set -eu; chmod 600 '$remote/token'; tar -xzf '$remote/routing.tar.gz' -C '$remote'; export ACME_EMAIL=\$(cat '$remote/acme-email'); bash '$remote/deploy/prepare-project-routing.sh' '$TARGET' '$remote/token'"
+            "set -eu; chmod 600 '$remote/token'; tar -xzf '$remote/routing.tar.gz' -C '$remote'; export ACME_EMAIL=\$(cat '$remote/acme-email'); bash '$remote/deploy/prepare-project-routing.sh' '$TARGET' '$remote/token' '$NAMESPACE'"
           {
             echo "### Project routing infrastructure: $TARGET"
             echo 'Wildcard certificate issued; staging renewal checked; certbot.timer enabled.'
-            echo 'Managed Docker network/DNS ready; nginx publisher installed and nginx -t passed.'
+            echo 'Nginx publisher installed and nginx -t passed; namespace preparation leaves project deployments intact.'
             echo 'Prepare both environments before enabling PROJECT_ROUTING_ENABLED and deploying normally.'
           } >> "$GITHUB_STEP_SUMMARY"

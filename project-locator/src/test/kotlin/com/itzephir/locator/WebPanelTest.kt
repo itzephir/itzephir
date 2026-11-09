@@ -148,7 +148,7 @@ class WebPanelTest : LocatorDatabaseTest() {
         locator.review(UUID.fromString(rejected.project.id), ProjectStatus.REJECTED, admin)
         application { projectLocator(locator, false, auth) }
         val html = client.get("/dev").bodyAsText()
-        assertTrue(html.contains("public-project")); assertTrue(html.contains("/dev/project/public_slug/"))
+        assertTrue(html.contains("public-project")); assertFalse(html.contains("/dev/project/")); assertFalse(html.contains("Открыть проект"))
         assertFalse(html.contains("pending-secret")); assertFalse(html.contains("rejected-secret")); assertFalse(html.contains(approved.project.identityId))
         locator.revoke(UUID.fromString(approved.project.id), admin)
         assertFalse(client.get("/dev").bodyAsText().contains("public-project"))

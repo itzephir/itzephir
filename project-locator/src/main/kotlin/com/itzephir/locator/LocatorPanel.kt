@@ -12,6 +12,7 @@ import io.ktor.server.application.call
 import io.ktor.server.application.createRouteScopedPlugin
 import io.ktor.server.request.receiveParameters
 import io.ktor.server.request.path
+import io.ktor.server.request.host
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
 import io.ktor.server.response.respondText
@@ -44,6 +45,7 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
             get {
                 val offset = call.offset()
                 val projects = locator.publicProjects(25, offset)
+                val stage = call.request.host() == "dev.itzephir.com"
                 call.renderPage("Проекты в разработке") {
                     div("dev-gallery-meta") {
                         p("eyebrow mono") { +"dev / Открытая мастерская" }
@@ -56,9 +58,10 @@ internal fun Application.locatorPanel(locator: PostgresLocator, secureCookies: B
                         article("project-card") {
                             h2 { +project.project }
                             if (project.description.isNotBlank()) p("project-description") { +project.description }
-                            p("muted mono") { +"/dev/project/${project.slug}/" }
+                            val url = if (stage) project.stageUrl else project.productionUrl
+                            p("muted mono") { +(url?.removePrefix("https://") ?: project.slug) }
                             div("project-card-actions") {
-                                if (project.readiness.canOpen) a("/dev/project/${project.slug}/", classes = "project-link") { +"Открыть проект" }
+                                if (project.readiness.canOpen && url != null) a(url, classes = "project-link") { +"Открыть проект" }
                                 span("help") { +project.readiness.label() }
                             }
                         }
@@ -379,11 +382,12 @@ private suspend fun ApplicationCall.editPage(project: Project, actor: Identity, 
             h2 { +"Адреса проекта" }
             if (!project.readiness.canOpen) p("help") { +"Проект находится на этапе проектирования. Адреса сохранены для будущего запуска; переход к приложению пока недоступен." }
             if (project.routing.mode in listOf(RoutingMode.DOCKER, RoutingMode.PROXY)) {
-                p("help") { +"Ссылки ниже перенаправляют на ${project.productionAppUrl} и ${project.stageAppUrl}." }
+                p("help") { +"Проект открывается на собственном поддомене." }
             }
             if (project.routing.mode == RoutingMode.REDIRECT) p("help") { +"Ссылки перенаправляют на ${project.routing.target}." }
-            p("eyebrow mono") { +"PRODUCTION" }; p("mono") { a(project.productionUrl) { +project.productionUrl.removePrefix("https://") } }
-            p("eyebrow mono") { +"STAGE" }; p("mono") { a(project.stageUrl) { +project.stageUrl.removePrefix("https://") } }
+            if (project.productionUrl == null) p("help") { +"Настройте адрес назначения и slug поддомена, чтобы открыть проект." }
+            project.productionUrl?.let { url -> p("eyebrow mono") { +"PRODUCTION" }; p("mono") { a(url) { +url.removePrefix("https://") } } }
+            project.stageUrl?.let { url -> p("eyebrow mono") { +"STAGE" }; p("mono") { a(url) { +url.removePrefix("https://") } } }
         }
     }
 }
@@ -404,8 +408,8 @@ private fun FORM.projectFields(project: String, slug: String, routing: ProjectRo
         } } }
         p("help") { +"Проектирование: карточка без кнопки запуска. В разработке: кнопка открытия включена. Включайте открытие после проверки приложения и его адреса." }
     }
-    div("field") { label { htmlFor = "slug"; +"Slug в адресе" }; textInput(name = "slug") { id = "slug"; value = slug; required = true; attributes["maxlength"] = "64"; attributes["pattern"] = "[a-z0-9][a-z0-9_-]{0,63}"; attributes["autocomplete"] = "off" }; p("help") { +"Ссылка на проект: /dev/project/<slug>/. Поддомен: <slug>.itzephir.com (stage: <slug>.dev.itzephir.com). Для поддомена — только буквы, цифры и дефисы, до 63 символов." } }
-    if (!enabled) p("notice") { +"Маршрутизация поддоменов ещё не включена. Настройки можно сохранить заранее; существующие адреса продолжают работать." }
+    div("field") { label { htmlFor = "slug"; +"Slug в адресе" }; textInput(name = "slug") { id = "slug"; value = slug; required = true; attributes["maxlength"] = "64"; attributes["pattern"] = "[a-z0-9][a-z0-9_-]{0,63}"; attributes["autocomplete"] = "off" }; p("help") { +"Поддомен: <slug>.itzephir.com (stage: <slug>.dev.itzephir.com). Для поддомена — только буквы, цифры и дефисы, до 63 символов." } }
+    if (!enabled) p("notice") { +"Маршрутизация поддоменов ещё не включена. Настройки можно сохранить заранее." }
     div("field") {
         label { htmlFor = "routing-mode"; +"Способ публикации" }
         select { id = "routing-mode"; name = "routingMode"; RoutingMode.entries.forEach { mode -> option { value = mode.databaseValue; selected = mode == routing.mode; +mode.label() } } }
@@ -413,7 +417,7 @@ private fun FORM.projectFields(project: String, slug: String, routing: ProjectRo
     div("field") {
         label { htmlFor = "routing-target"; +"Адрес назначения" }
         textInput(name = "routingTarget") { id = "routing-target"; value = routing.target; attributes["maxlength"] = "2048"; attributes["autocomplete"] = "off"; attributes["spellcheck"] = "false" }
-        p("help") { +"Контейнер: minor-web:8080. Сервер: http://127.0.0.1:8080 или https://example.org. Редирект: полный URL. У существующего маршрута оставьте поле пустым." }
+        p("help") { +"Контейнер: minor-web:8080. Сервер: http://127.0.0.1:8080 или https://example.org. Редирект: полный URL. Если адрес ещё не настроен, оставьте поле пустым." }
         p("help") { +"Контейнер должен быть подключён к сети itzephir-projects-prod или itzephir-projects-dev. Приложение на поддомене работает от корня /." }
     }
 }
@@ -433,7 +437,7 @@ private fun ProjectReadiness.label() = when (this) {
     ProjectReadiness.DEVELOPMENT -> "В разработке"
 }
 private fun RoutingMode.label() = when (this) {
-    RoutingMode.LEGACY -> "Существующий маршрут из CI"
+    RoutingMode.LEGACY -> "Адрес не настроен"
     RoutingMode.DOCKER -> "Docker-контейнер на этой VM"
     RoutingMode.PROXY -> "Прокси на IP или домен"
     RoutingMode.REDIRECT -> "Редирект на внешний сайт"

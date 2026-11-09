@@ -84,10 +84,8 @@ data class Project(
     val description: String = "",
     val readiness: ProjectReadiness = ProjectReadiness.DEVELOPMENT,
 ) {
-    val productionUrl get() = "https://itzephir.com/dev/project/$slug/"
-    val stageUrl get() = "https://dev.itzephir.com/dev/project/$slug/"
-    val productionAppUrl get() = "https://$slug.itzephir.com/"
-    val stageAppUrl get() = "https://$slug.dev.itzephir.com/"
+    val productionUrl get() = "https://$slug.itzephir.com/".takeIf { routing.hasSubdomain(slug) }
+    val stageUrl get() = "https://$slug.dev.itzephir.com/".takeIf { routing.hasSubdomain(slug) }
 }
 
 @Serializable
@@ -100,7 +98,7 @@ data class Registration(val project: Project, val identity: Identity, val token:
 data class TokenIssued(val identity: Identity, val token: String)
 
 @Serializable
-data class ResolvedProject(val project: Project, val productionUrl: String, val stageUrl: String)
+data class ResolvedProject(val project: Project, val productionUrl: String?, val stageUrl: String?)
 
 @Serializable
 data class ApiError(val code: String, val message: String)

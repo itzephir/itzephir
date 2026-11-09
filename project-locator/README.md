@@ -4,9 +4,10 @@ Service registry for `itzephir`, backed by PostgreSQL. The `project-locator`
 Gradle module owns the model, identities, migrations and HTTP API; `website`
 mounts it when locator configuration is present.
 
-`/dev` is the development-projects section of the website. The hostname selects
-the environment: production is `itzephir.com/dev/project/SLUG/`, stage is
-`dev.itzephir.com/dev/project/SLUG/`. Underscores in slugs are supported.
+`/dev` is the project catalog. Launch URLs are `SLUG.itzephir.com` and
+`SLUG.dev.itzephir.com`. The latter relays through the dev stand's locator; the
+project itself owns application environments. Public `/dev/project/SLUG/` and
+`/dev/projects/SLUG/` entry paths have been removed and return 404.
 
 ## Registration and identities
 
@@ -113,7 +114,7 @@ approved credential workflow, never in documentation, command output or screensh
 The service token is not required for managing the record through the web panel.
 
 Readiness checks apply to the registry gateway when that gateway is enabled.
-They do not change independently deployed legacy nginx routes. Saving metadata
+Retired path routes are not used. Saving metadata
 does not change DNS/TLS, create containers, activate `PROJECT_ROUTING_ENABLED`,
 or provision PR stands. Application publication remains a separate deployment step.
 
@@ -127,17 +128,41 @@ on registration and updates. Modes:
 | `docker` | `app-container:8080` | Reverse proxy on `SLUG.itzephir.com` / `SLUG.dev.itzephir.com` |
 | `proxy` | `http://127.0.0.1:8080` or `https://example.org` | Reverse proxy on the same project subdomains |
 | `redirect` | `https://example.org/page?q=1` | Temporary redirect to the exact destination |
-| `legacy` | Empty | Existing project CI/nginx route, for backwards compatibility |
+| `legacy` | Empty | Unconfigured record; no launch URL or routing |
 
-Existing records and older registration clients default to `legacy`. Omitting
+Existing records and older registration clients default to `legacy`; their
+`productionUrl` and `stageUrl` in the resolve response are null and the catalog
+has no launch button. Configure a target (and a DNS-compatible slug) explicitly
+to publish them. Omitting
 `routing` from PATCH preserves the project's settings. A changed mode/target
 increments the revision; owner/service edits return to `pending` and require a
 new review. The admin request list displays the submitted target. Pending,
 rejected and revoked projects cannot be routed by the registry gateway.
 
-For Docker/proxy modes, `/dev/project/SLUG/` redirects with **307** to the
-matching stand's subdomain, preserving the remaining path and query string.
-`/dev/projects/SLUG/` is also accepted once registry routing is enabled.
+Migration `005-project-hosts.sql` converts the existing `minor-website` record
+with slug `minor-web` and an empty legacy target to a proxy through its stable
+private gateway: port `18100` on prod, `18101` on dev, base path
+`/dev/project/minor-web`. The project's own CI can keep rotating backend ports
+without changing this target. The public project opens at `/` on its subdomain;
+the retired portfolio entry paths still return 404. Internal redirect prefixes,
+private redirect ports and cookie paths are translated at the outer gateway.
+The compatibility loopback hop receives the public `Host`.
+
+The migration preserves IDs, tokens, owners, approval/revocation and readiness,
+and increments only a converted row's revision. Already configured routes,
+including planning projects, are preserved. Migration version/checksum tracking
+makes it run once, in the same transaction as the other startup migrations;
+later manual target changes survive restarts. The standard database names
+`itzephir_locator_dev` / `itzephir_locator_prod` determine the stand. Set optional
+`LOCATOR_ENVIRONMENT=dev|prod` for custom database names; migration fails and rolls
+back if a matching legacy record exists but the stand cannot be determined.
+
+The catalog, panel and resolve API return direct project subdomain URLs for
+configured projects. The catalog selects production or dev according to its
+hostname. After operator DNS/TLS enrollment, `PREFIX.SLUG.itzephir.com` and
+`PREFIX.SLUG.dev.itzephir.com` select exactly the same slug/target as their base
+host in the corresponding locator. The single-label prefix is opaque to itzephir;
+the project owns its dev/prod/PR interpretation and deployment.
 The reverse proxy serves the application at `/`, supports request bodies and
 WebSocket upgrades, resolves Docker names dynamically, verifies upstream HTTPS,
 and forwards the public host/protocol in `X-Forwarded-Host` / `X-Forwarded-Proto`.
@@ -147,14 +172,18 @@ which set absolute URLs or cookie domains may still need their public URL config
 
 A `redirect` uses the exact configured URL: source paths/query strings are not
 appended, and the destination may include a query or fragment. It does not require
-a project subdomain. Only HTTP/HTTPS destinations are accepted. Docker targets
+any proxy backend, but is reached through its project subdomain. Only HTTP/HTTPS
+destinations are accepted. Docker targets
 use a network name/alias without dots plus a numeric port; network aliases can be
-used for containers whose names contain dots. Proxy/Docker slugs must be DNS
-labels (1–63 lowercase letters/digits/hyphens, no trailing hyphen); `dev` and `www`
-are reserved. Legacy/redirect slugs retain underscore support.
+used for containers whose names contain dots. All configured modes require DNS
+labels (1–63 lowercase letters/digits/hyphens, no trailing hyphen); `dev`, `www`
+and `opendesign` are reserved. Unconfigured records retain underscore support.
+Docker targets receive the public `Host`; proxy targets retain their upstream
+`Host`. Both receive the public hostname in `X-Forwarded-Host`; client-supplied
+values are overwritten. Upstream TLS SNI and verification use the destination name.
 
 nginx uses `GET /api/project-locator/v1/gateway/{slug}` as an `auth_request`
-subrequest, setting `X-Project-Host`, `X-Project-Entry` and `X-Original-URI` itself.
+subrequest, setting `X-Project-Host` and `X-Original-URI` itself.
 A 204 response supplies validated proxy headers; a 403 with Location selects a
 307 redirect; a 403 without Location becomes 404. These decisions contain only
 approved public configuration, and carry no authentication credentials. Browser
@@ -163,8 +192,9 @@ current approval/revocation state; project edits do not write nginx configuratio
 or grant the website access to Docker's socket.
 
 **Activation is separate from shipping the panel.** Without the release marker
-`nginx/enable-project-routing`, the existing gateway remains active and the panel
-shows that subdomain routing is not enabled. Configure DNS, wildcard certificates
+`nginx/enable-project-routing`, project subdomain routing is disabled and the panel
+shows that it is not enabled. Retired public entry paths return 404 either way.
+Configure DNS, wildcard certificates
 and the committed infrastructure before setting `PROJECT_ROUTING_ENABLED=true`
 in CI; see [deployment instructions](../deploy/README.md#project-subdomain-routing).
 
@@ -173,7 +203,6 @@ in CI; see [deployment instructions](../deploy/README.md#project-subdomain-routi
 - `/dev` is a public landing page with approved, non-revoked projects only.
 - `/dev/panel` is the web management panel. Owners see only assigned projects;
   administrators see all projects, requests and users.
-- `/dev/project/SLUG/` is the existing project namespace.
 
 Paths are identical on production and stage; the hostname selects the stand.
 The pages use server-rendered HTML/CSS and work without JavaScript.

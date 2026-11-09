@@ -82,7 +82,7 @@ internal val StagingBadge = createApplicationPlugin("StagingBadge") {
             attributes["aria-label"] = "Окружение"
             span("staging-badge-dot") { attributes["aria-hidden"] = "true" }
             span { +"Вы на тестовом стенде" }
-            val path = call.attributes.getOrNull(originalProjectUri)?.substringBefore('?') ?: call.request.path()
+            val path = call.request.path()
             a("$path?$query", classes = "staging-badge-close") {
                 attributes["aria-label"] = "Скрыть уведомление о тестовом стенде"
                 title = "Скрыть уведомление"

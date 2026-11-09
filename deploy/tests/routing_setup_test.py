@@ -75,6 +75,7 @@ elif name == "certbot":
         stop(1 if os.getenv("FAIL_RENEWAL") else 0)
 elif name == "nginx":
     if args == ["-V"]: print("--with-http_auth_request_module")
+    if "-c" in args and os.getenv("FAIL_NGINX_PREFLIGHT"): stop(1)
     stop(1 if args == ["-t"] and os.getenv("FAIL_NGINX") else 0)
 elif name == "dig":
     print("127.0.0.2")
@@ -122,8 +123,8 @@ class RoutingSetupTest(unittest.TestCase):
         self.env = {**os.environ, "PATH": str(tools) + ":" + os.environ["PATH"], "ROUTING_TEST_STATE": str(self.state)}
         self.env.pop("ACME_EMAIL", None)
 
-    def run_setup(self, target="dev", **extra):
-        return subprocess.run(["bash", str(DEPLOY / "prepare-project-routing.sh"), target, str(self.token)],
+    def run_setup(self, target="dev", namespace="", **extra):
+        return subprocess.run(["bash", str(DEPLOY / "prepare-project-routing.sh"), target, str(self.token), namespace],
                               env={**self.env, **extra}, capture_output=True, text=True)
 
     def saved(self): return json.loads(self.state.read_text())
@@ -159,6 +160,44 @@ class RoutingSetupTest(unittest.TestCase):
                 self.assertNotEqual(result.returncode, 0)
                 self.assertFalse(self.saved()["containers"])
                 self.assertFalse(Path("/usr/local/sbin/itzephir-apply-nginx").exists())
+
+    def test_namespace_certificates_are_separate_and_enrollment_does_not_change_docker_or_routes(self):
+        for target in ("dev", "prod"):
+            result = self.run_setup(target)
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        before = self.saved()
+        configs = {target: Path(f"/etc/nginx/itzephir/{target}.conf").read_bytes() for target in ("dev", "prod")}
+        for target in ("dev", "prod", "dev"):
+            result = self.run_setup(target, "anyq")
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            lineage = f"itzephir-project-{target}-anyq"
+            domain = "anyq." + ("dev." if target == "dev" else "") + "itzephir.com"
+            certificate = f"/etc/letsencrypt/live/{lineage}/fullchain.pem"
+            subprocess.run(["openssl", "x509", "-in", certificate, "-noout", "-checkhost", f"pr-42.{domain}"], check=True, capture_output=True)
+            self.assertEqual(json.loads(Path(f"/etc/itzephir/project-namespaces/{target}.json").read_text()), ["anyq"])
+            self.assertEqual(Path(f"/etc/nginx/itzephir/{target}.conf").read_bytes(), configs[target])
+            self.assertTrue(any(call[:2] == ["certbot", "renew"] and lineage in call for call in self.saved()["calls"]))
+        after = self.saved()
+        self.assertEqual(before["containers"], after["containers"])
+        self.assertEqual(before["networks"], after["networks"])
+        later_calls = after["calls"][len(before["calls"]):]
+        self.assertFalse(any(call[0] == "docker" and call[1] != "info" for call in later_calls))
+        for failure in ("FAIL_CERTIFICATE", "FAIL_RENEWAL", "FAIL_NGINX_PREFLIGHT"):
+            result = self.run_setup("dev", "failed", **{failure: "true"})
+            self.assertNotEqual(result.returncode, 0)
+            self.assertEqual(json.loads(Path("/etc/itzephir/project-namespaces/dev.json").read_text()), ["anyq"])
+
+    def test_namespace_requires_base_preparation_and_rejects_unsafe_names(self):
+        result = self.run_setup("dev", "anyq")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(call[0] == "certbot" for call in self.saved()["calls"]))
+        result = self.run_setup()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        before = len(self.saved()["calls"])
+        for slug in ("dev", "opendesign", "www", "../prod", "anyq.dev", "a_b", "a" * 64):
+            result = self.run_setup("dev", slug)
+            self.assertNotEqual(result.returncode, 0, slug)
+        self.assertFalse(any(call[0] == "certbot" for call in self.saved()["calls"][before:]))
 
     def test_failed_dns_container_restores_previous_container_and_corefile(self):
         result = self.run_setup()
@@ -205,6 +244,8 @@ class RoutingSetupTest(unittest.TestCase):
         command = ["bash", str(DEPLOY / "renew-project-certificate.sh")]
         for lineage, extra, expected in [
             ("/etc/letsencrypt/live/itzephir-projects-dev", {}, 0),
+            ("/etc/letsencrypt/live/itzephir-project-dev-anyq", {}, 0),
+            ("/etc/letsencrypt/live/itzephir-project-prod-anyq", {"FAIL_NGINX": "true"}, 1),
             ("/etc/letsencrypt/live/itzephir-projects-prod", {"FAIL_NGINX": "true"}, 1),
             ("/etc/letsencrypt/live/itzephir.com", {}, 0),
         ]:
@@ -214,7 +255,7 @@ class RoutingSetupTest(unittest.TestCase):
             result = subprocess.run(command, env={**self.env, **extra, "RENEWED_LINEAGE": lineage}, capture_output=True)
             self.assertEqual(result.returncode, expected)
             calls = self.saved()["calls"]
-            if lineage.endswith("-dev"):
+            if lineage.endswith("-dev") or lineage.endswith("-dev-anyq"):
                 self.assertEqual(calls, [["nginx", "-t"], ["systemctl", "reload", "nginx"]])
             elif expected:
                 self.assertEqual(calls, [["nginx", "-t"]])

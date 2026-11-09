@@ -12,16 +12,29 @@ import kotlinx.coroutines.withContext
 class PostgresLocator(private val dataSource: DataSource) {
     private val dispatcher = Dispatchers.IO.limitedParallelism(4)
 
-    suspend fun initialize(adminToken: String) {
+    suspend fun initialize(adminToken: String, environment: String? = null) {
+        require(environment == null || environment in setOf("dev", "prod")) { "LOCATOR_ENVIRONMENT must be dev or prod" }
         require(adminToken.length in 32..256 && adminToken.all { it.code in 33..126 }) {
             "LOCATOR_ADMIN_TOKEN must contain 32-256 printable non-whitespace characters"
         }
         transaction { connection ->
             connection.createStatement().use { it.execute("SELECT pg_advisory_xact_lock(538550832341)") }
+            // Existing installations have stand-specific database names. An explicit value
+            // also supports installations with custom names; migration SQL never uses Host.
+            connection.prepareStatement("""
+                SELECT set_config('itzephir.locator_environment', coalesce(?::text,
+                    CASE current_database()
+                        WHEN 'itzephir_locator_dev' THEN 'dev'
+                        WHEN 'itzephir_locator_prod' THEN 'prod'
+                        ELSE ''
+                    END), true)
+            """.trimIndent()).use {
+                it.setString(1, environment); it.execute()
+            }
             connection.createStatement().use {
                 it.execute("CREATE TABLE IF NOT EXISTS locator_schema_migrations (version integer PRIMARY KEY, checksum char(64) NOT NULL, installed_at timestamptz NOT NULL DEFAULT now())")
             }
-            listOf("001-initial.sql", "002-panel.sql", "003-routing.sql", "004-catalog.sql").forEachIndexed { index, name ->
+            listOf("001-initial.sql", "002-panel.sql", "003-routing.sql", "004-catalog.sql", "005-project-hosts.sql").forEachIndexed { index, name ->
                 val version = index + 1
                 val migration = checkNotNull(javaClass.getResource("/db/locator/$name")).readText()
                 val checksum = Tokens.hash(migration)

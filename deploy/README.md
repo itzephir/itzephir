@@ -142,59 +142,49 @@ Inspect services with `systemctl status itzephir@dev` and
 
 ## Other projects on the VM
 
-The `/dev/project/SLUG/` namespace is a section of both websites. Hostname selects
-the environment: `itzephir.com/dev/project/SLUG/` is production;
-`dev.itzephir.com/dev/project/SLUG/` is stage.
+Projects are published at `SLUG.itzephir.com` and `SLUG.dev.itzephir.com`.
+The latter is a relay through the **dev stand's Project Locator**, not a request
+to launch an application's development environment. Each locator owns its own
+approved project targets. The project interprets any additional hostname prefix
+and owns its application builds, containers, CI and production/dev/PR stands.
 
-`deploy/nginx/project-gateway.conf` defines isolated loopback gateways:
-`18100` includes `/etc/nginx/projects/*-prod.conf`; `18101` includes `*-dev.conf`.
-Unknown projects return 404. Individual project deployers publish only their own
-route snippets and share `/run/lock/itzephir-nginx.lock` with the portfolio publisher.
+Public `/dev/project/SLUG/`, `/dev/projects/SLUG/` and the old staging interceptor
+are removed and return 404, without redirects. The catalog, panel and resolve API
+use direct subdomain URLs. Migration `005-project-hosts.sql` transfers the verified
+existing `minor-website` / `minor-web` record from `legacy` to `proxy`, on both stands.
+The stable internal targets are `http://127.0.0.1:18100/dev/project/minor-web` (prod)
+and `http://127.0.0.1:18101/dev/project/minor-web` (dev). These loopback gateways and
+project-owned snippets stay in place: the project's CI owns its rotating backend
+ports, so the migration must not pin the container currently occupying one slot.
+They are internal proxy destinations, not public launch paths. The outer gateway
+preserves the public host and strips the internal prefix/port from redirects and
+cookie paths. Do not remove `/etc/nginx/conf.d/project-gateway.conf` or the migrated
+project's snippets while its registry target still uses them.
 
-The publisher adds the correct gateway location after validating each packaged
-application configuration, preserving project routes even for older releases.
-`itzephir-apply-nginx --projects` migrates both existing host configurations and
-removes the obsolete `/project/` namespace. Shared nginx and root helper updates
-must run through committed infrastructure CI, including the initial installation.
-The minor-web bootstrap workflow installs these files from the pinned commit;
-normal application CI publishes only its own environment's route.
+The migration runs transactionally once during normal application startup: PR
+deployment applies it to dev; a permitted merge/deployment applies it to production.
+It increments only the migrated record's revision, preserving IDs, credentials,
+owners, review status/metadata, revocation, description and readiness. Already
+configured destinations (including planning `anyq` and `itzmoney`) and other rows
+are untouched. It selects the stand from the standard database name installed by
+`setup-locator.py`; with a custom database name, set `LOCATOR_ENVIRONMENT=dev|prod`
+in its private environment file. An ambiguous stand fails startup and rolls back
+the transaction instead of routing a development project to production.
 
-## Stage badge on project pages
-
-`dev.conf` adds a shared interception step before the existing stage project
-gateway: public `/dev/project/<slug>/...` requests are rewritten internally to
-`/__staging-project/...` and sent to the stage Ktor service. That endpoint proxies
-the original path/query to `127.0.0.1:18101`, preserving the project deployer's
-route snippets, redirects and cookies. Complete HTML receives the same badge as
-the portfolio. Other response types and downloads stream through; HTTP upgrade
-requests keep their previous direct gateway route. The internal nginx location
-rejects direct external requests.
-
-The rewrite is present only in the stage release template, so normal PR CI
-publishes it with the existing validated nginx publisher and rollback. No root
-helper upgrade, manual VM edit or project repository change is needed.
-`prod.conf` has no interception route, and the production application installs
-no proxy endpoint. Query parameters cannot enable interception on production.
-
-CI checks the real chain (public nginx → Ktor → project gateway → project app)
-in an isolated container, including compressed requests/responses, query values,
-cache validators, redirects, cookies, downloads and production isolation:
-
-```sh
-docker run --rm -v "$PWD:/work:ro" -w /work --entrypoint /bin/sh postgres:18-alpine -c \
-  'apk add --no-cache nginx python3 openjdk21-jre-headless >/dev/null && PYTHONDONTWRITEBYTECODE=1 PROJECT_BADGE_REQUIRE_NGINX_TESTS=true python3 -m unittest discover -s deploy/tests -p project_badge_integration_test.py'
-```
-
-Build `:website:installDist` first. Ordinary Python test discovery skips this
-container-only test; the explicit CI step requires it to run.
+Other `legacy` records remain editable as unconfigured records, with null launch
+URLs and no launch button; select a Docker/proxy/redirect target and approve it to
+publish them. Underscore slugs must be changed to DNS labels first. The `minor-web`
+repository will need to use its new subdomain for future CI public health checks;
+this repository does not change application deployment scripts.
+The portfolio's stage badge remains on the portfolio and locator pages. Projects
+own their own environment indicators.
 
 ## Project subdomain routing
 
 The panel can save Docker, proxy and external redirect destinations. Activation is
-**opt-in**: normal releases keep the existing `/dev/project/SLUG/` gateway until
-repository variable `PROJECT_ROUTING_ENABLED` is `true`. No DNS, certificates or
-VM configuration are changed by the routing PR. Preview can show and test the new
-forms before public subdomains exist.
+**opt-in**: project subdomains are enabled when repository variable
+`PROJECT_ROUTING_ENABLED` is `true`. Retired path routes return 404 with or without
+this flag. PR checks do not change DNS, certificates or VM configuration.
 
 Wildcard DNS records `*.itzephir.com` and `*.dev.itzephir.com` must point to the
 privately configured deployment host. Keep the existing root,
@@ -256,10 +246,11 @@ unattended renewal. Updating the environment secret and rerunning provisioning
 rotates that credential; failed issuance/renewal checks restore the previous token.
 The Python hook uses Timeweb API v1 directly, matching
 `twc`'s TXT operation; it needs no CLI profile or third-party Python packages.
-It permits only `_acme-challenge.itzephir.com` and
-`_acme-challenge.dev.itzephir.com`, waits for every authoritative server plus a
-recursive resolver, and removes only the exact TXT record ID created by its auth
-invocation. It waits up to 20 minutes for each challenge and queries the recursive
+It permits only the base challenges `_acme-challenge.itzephir.com` and
+`_acme-challenge.dev.itzephir.com`, plus `_acme-challenge.SLUG[.dev].itzephir.com`
+for valid project DNS labels (excluding `dev`, `www` and `opendesign`). It waits for
+every authoritative server plus a recursive resolver, and removes only the exact
+TXT record ID created by its auth invocation. It waits up to 20 minutes for each challenge and queries the recursive
 TXT cache only after every authoritative server has the new validation. This
 avoids caching an old wildcard TXT while Timeweb is still synchronizing its DNS
 servers, and allows an already cached response to expire. The workflow has a
@@ -292,9 +283,9 @@ References: [Certbot manual hooks and renewal](https://eff-certbot.readthedocs.i
    `PROJECT_ROUTING_ENABLED=true`, then perform normal website deployments for
    preview and production. This packages `nginx/enable-project-routing`; the
    publisher applies each environment's nginx configuration atomically with
-   validation and rollback. It does not create a separate nginx file per project.
+   validation and rollback. Project targets are still resolved per request.
 3. Verify the site, `/dev`, `/dev/panel`, and an approved running project's
-   subdomain/entry URL on each stand. Planning projects keep their card without a
+   subdomain URL on each stand. Planning projects keep their card without a
    launch link. Roll back by setting the variable to false and redeploying; TLS
    files and Docker networks may remain available for a later activation.
 
@@ -309,16 +300,96 @@ the next request, without another nginx deployment. The resolver uses a five-sec
 DNS cache so a restarted container's new address is picked up automatically.
 
 Configured projects use `SLUG.itzephir.com` (prod) and `SLUG.dev.itzephir.com`
-(stage). The stable `/dev/project/SLUG/` URL redirects with 307 to the matching
-subdomain or exact external URL; `/dev/projects/SLUG/` is an alias. Legacy projects
-still use their original path: production and upgrades go directly to
-`18100`/`18101`; ordinary stage requests pass through the existing Ktor HTML
-interceptor before `18101`, preserving stage badges. The registry replaces the
-unconditional stage rewrite so approval checks and redirects run first. Approved registry entries are
-required once routing is enabled, including legacy projects. Review destinations
-before approving: proxy destinations are served by the VM and must be trusted.
+(dev locator). Every request checks approval, readiness and revocation. Review
+destinations before approving: proxy destinations are served by the VM and must
+be trusted. The catalog's launch link selects the hostname matching its locator
+stand; it does not proxy application content through `/dev`.
 
-Gateway verification uses the generated configuration with real nginx, mock HTTP/
-HTTPS backends and DNS, checking redirects, request bodies, verified TLS, legacy
-routes, missing/pending/revoked projects and WebSocket upgrades. CI runs it in an
-isolated container; it does not need real DNS or certificates.
+### Enable a project's hostname namespace
+
+An additional **single DNS label** is project-owned: `dev.anyq.itzephir.com`,
+`pr-42.anyq.dev.itzephir.com`, or `anything.anyq.itzephir.com` all select `anyq`
+in the corresponding locator. Prefixes have no deployment meaning to itzephir.
+Unknown/pending/revoked/planning projects still return 404. A prefix equal to a
+second registered slug does not switch projects. Other depths are deliberately
+rejected: standard wildcard TLS certificates cover exactly one label.
+
+Base routing above must already be prepared. For each project and locator stand:
+
+1. Register its target in that locator, configure the application to accept its
+   public hostnames, set readiness to `development`, and approve the record.
+   A Docker target can be the project's own router; project CI manages its
+   services behind that router. No application deployment is added to itzephir.
+2. In Timeweb, point **both the exact name and its wildcard** to the existing
+   gateway VM, preserving mail and unrelated records:
+
+   | Locator | Exact A record | Wildcard A record |
+   | --- | --- | --- |
+   | prod | `anyq` | `*.anyq` |
+   | dev | `anyq.dev` | `*.anyq.dev` |
+
+   These are names relative to the `itzephir.com` zone. Do not rely on the common
+   wildcard for the exact name: adding a wildcard/TXT child creates a DNS node
+   that can prevent fallback to the parent wildcard. Use the privately configured
+   VM address; do not publish an AAAA record without working IPv6. Check resolution
+   of both `anyq[.dev].itzephir.com` and `routing-probe.anyq[.dev].itzephir.com`
+   from authoritative and recursive DNS before proceeding.
+3. After the infrastructure change is merged, run **Prepare project routing
+   infrastructure** from `main` with `target=dev`, `namespace=anyq`; repeat with
+   `target=prod` when needed. Leaving `namespace` empty prepares base routing.
+   The project wildcard is issued separately as
+   `/etc/letsencrypt/live/itzephir-project-dev-anyq/` or
+   `itzephir-project-prod-anyq/`. Existing common/root certificates are preserved.
+   The same unattended DNS-01 renewal and validated nginx deploy hook apply.
+4. Provisioning checks the new certificate and staging renewal, validates the
+   complete future nginx configuration, then atomically adds only the slug to
+   `/etc/itzephir/project-namespaces/dev.json` or `prod.json` (root-owned).
+   Repeating enrollment is safe and adding another slug preserves earlier ones.
+   A failed issuance, renewal check or nginx preflight does not enroll the slug.
+   Namespace preparation does not rebuild/restart project containers, change
+   targets or activate nginx. The manifests are infrastructure enrollment, not
+   another service registry.
+5. Run a normal website deployment for that locator stand with
+   `PROJECT_ROUTING_ENABLED=true`. It reads the persistent manifest and publishes
+   the namespace servers with their own certificates and a fixed resolver slug.
+   For dev, rerun the PR's **Website CI/CD** run (or open a small follow-up PR);
+   for production, rerun the `main` push run after the merge. Manual workflow
+   dispatch is build/test only. Ordinary project target changes
+   subsequently take effect on the next request without provisioning/redeploying
+   nginx. Changing the project's slug requires separate enrollment for the new
+   name; old certificates/enrollment do not grant access after registry removal.
+6. Verify the base address, a project-defined prefix, path/query, upload,
+   application redirects and WebSocket endpoint. Verify an unregistered slug and
+   a revoked project cannot reach the application. A prefixed host uses the same
+   locator target as the base address; it is the application's job to select a
+   concrete stand.
+
+For an operator running the committed scripts directly, the equivalent is
+`sudo bash deploy/prepare-project-routing.sh dev /PRIVATE/TOKEN_FILE anyq`, followed
+by normal CI deployment. Never put the token value in arguments. To disable one
+namespace, remove its slug from the corresponding root-owned JSON manifest and
+redeploy that stand; keep certificates until no active/rollback nginx config
+references them. To stop project access immediately, revoke it in the locator.
+Setting `PROJECT_ROUTING_ENABLED=false` and redeploying disables all project
+subdomains for that stand; retired public path routes remain 404.
+
+Docker destinations receive the normalized public hostname in both `Host` and
+`X-Forwarded-Host`. Proxy destinations retain their configured upstream authority
+in `Host` for compatibility with virtual hosts; their original public hostname is
+always in the gateway-overwritten `X-Forwarded-Host`. Verified upstream TLS uses
+the destination's DNS name for SNI and certificate verification, independently of
+public `Host`. Both modes preserve the original escaped path, query, body and
+WebSocket upgrade. Proxy base paths are prepended; internal upstream redirects
+are rewritten to public paths. Redirect targets remain exact: no source path or
+query is appended. Applications must trust forwarded headers only from the gateway.
+
+Gateway verification uses the generated prod and dev configuration together with
+real nginx, distinct common/namespace certificates, mock HTTP/HTTPS backends and
+DNS. It checks verified SNI/hostname matching, wrong-depth rejection, stand and
+slug isolation, HTTP redirects, request bodies, upstream TLS, retired entry paths,
+missing/pending/revoked projects, forwarded hosts and WebSocket upgrades. CI uses
+an isolated container and never requests public certificates or edits live DNS.
+
+References: [nginx server-name selection](https://nginx.org/en/docs/http/server_names.html),
+[wildcard TLS depth](https://docs.aws.amazon.com/acm/latest/userguide/acm-concepts.html),
+[DNS wildcard synthesis](https://www.rfc-editor.org/rfc/rfc4592#section-2.2.2).

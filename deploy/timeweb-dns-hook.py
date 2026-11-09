@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Certbot DNS-01 hooks, restricted to the two itzephir wildcard challenges.
+"""Certbot DNS-01 hooks, restricted to itzephir and project wildcard challenges.
 
 Uses Timeweb API v1, like twc's TXT-record command. No third-party Python packages.
 Only the record ID returned by this auth invocation may be removed by cleanup.
@@ -74,9 +74,17 @@ class Timeweb:
 
 def challenge(domain, validation):
     domain = domain.removeprefix("*.")
-    if domain not in {ZONE, "dev." + ZONE} or not re.fullmatch(r"[A-Za-z0-9_-]{20,256}", validation):
-        raise ValueError("Only itzephir.com and dev.itzephir.com DNS challenges are allowed")
-    return "_acme-challenge" + (".dev" if domain.startswith("dev.") else "")
+    suffix = ""
+    if domain not in {ZONE, "dev." + ZONE}:
+        match = re.fullmatch(r"([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)\.(dev\.)?itzephir\.com", domain)
+        if not match or match[1] in {"dev", "www", "opendesign"}:
+            raise ValueError("Only itzephir.com, dev.itzephir.com and project namespaces are allowed")
+        suffix = "." + domain.removesuffix("." + ZONE)
+    elif domain == "dev." + ZONE:
+        suffix = ".dev"
+    if not re.fullmatch(r"[A-Za-z0-9_-]{20,256}", validation):
+        raise ValueError("Invalid ACME validation")
+    return "_acme-challenge" + suffix
 
 
 def dig(server, host, kind):

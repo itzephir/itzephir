@@ -17,5 +17,5 @@ fun locatorFromEnvironment(environment: Map<String, String> = System.getenv()): 
         socketTimeout = 10
         applicationName = "itzephir-project-locator"
     }
-    return PostgresLocator(source).also { runBlocking { it.initialize(values.getValue("LOCATOR_ADMIN_TOKEN")) } }
+    return PostgresLocator(source).also { runBlocking { it.initialize(values.getValue("LOCATOR_ADMIN_TOKEN"), environment["LOCATOR_ENVIRONMENT"]) } }
 }
